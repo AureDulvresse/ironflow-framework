@@ -129,6 +129,48 @@ class Gate
         return $clone;
     }
 
+    // ── Explicit policy targeting (AdonisJS-style bouncer) ─────────────
+
+    /**
+     * Scope authorization to an explicit policy class.
+     *
+     *   $gate->with(PostPolicy::class)->authorize('edit', $post);
+     */
+    public function with(string $policyClass): PolicyGate
+    {
+        return new PolicyGate($this, $policyClass, $this->userOverride);
+    }
+
+    /**
+     * Run an ability against an explicit policy class for the current
+     * (or supplied) user. Honours the policy before() hook and the Gate's
+     * global before/after hooks. Returns false when no user is resolved.
+     *
+     * @internal Used by {@see PolicyGate}; prefer with() in application code.
+     */
+    public function checkPolicy(
+        string $policyClass,
+        string $ability,
+        array $arguments = [],
+        mixed $userOverride = false
+    ): bool {
+        $user = $userOverride !== false ? $userOverride : $this->resolveUser();
+
+        if ($user === null) {
+            return false;
+        }
+
+        $before = $this->runBeforeCallbacks($user, $ability, $arguments);
+        if ($before !== null) {
+            return $before;
+        }
+
+        $policy = $this->container->make($policyClass);
+        $result = $this->callPolicyInstance($policy, $user, $ability, $arguments);
+
+        return $this->runAfterCallbacks($user, $ability, $arguments, $result);
+    }
+
     // ── Policy resolution ─────────────────────────────────────────────
 
     /** Resolve and return the policy object for a model class or instance. */
@@ -211,7 +253,16 @@ class Gate
             return false;
         }
 
-        // Policy::before() hook
+        return $this->callPolicyInstance($policy, $user, $ability, $arguments);
+    }
+
+    /**
+     * Invoke an ability method on a resolved policy instance, honouring the
+     * policy's own before() hook. Shared by convention-based and explicit
+     * (with()) policy checks.
+     */
+    private function callPolicyInstance(object $policy, object $user, string $ability, array $arguments): bool
+    {
         if (method_exists($policy, 'before')) {
             $before = $policy->before($user, $ability);
             if ($before !== null) {

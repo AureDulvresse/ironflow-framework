@@ -27,7 +27,7 @@ class AuthManager
         $this->defaultGuard = $config['defaults']['guard'] ?? 'session';
     }
 
-    public function guard(string $name = null): GuardInterface
+    public function guard(?string $name = null): GuardInterface
     {
         $name ??= $this->defaultGuard;
 
@@ -92,8 +92,22 @@ class AuthManager
 
         return match ($guardConfig['driver'] ?? $name) {
             'session' => new SessionGuard($this->session, $this->db, $guardConfig),
-            'jwt' => new JwtGuard($this->db, $guardConfig),
+            'jwt' => $this->createJwtGuard($guardConfig),
             default => throw new \InvalidArgumentException("Unknown auth guard driver [{$name}]."),
         };
+    }
+
+    private function createJwtGuard(array $guardConfig): JwtGuard
+    {
+        $request = null;
+        try {
+            $request = \Ironflow\Application::getInstance()
+                ->getContainer()
+                ->make(\Ironflow\Http\Request::class);
+        } catch (\Throwable) {
+            // Request may not be bound in console context.
+        }
+
+        return new JwtGuard($this->db, $guardConfig, $request);
     }
 }

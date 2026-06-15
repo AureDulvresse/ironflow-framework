@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Ironflow\Http;
 
-use Ironflow\Auth\Gate;
 use Ironflow\Application;
-use Ironflow\Exceptions\HttpException;
 use Ironflow\Http\Resources\JsonResource;
 use Ironflow\Http\Resources\ResourceCollection;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -14,7 +12,9 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 /**
  * Base controller for API endpoints.
  *
- * Provides fluent helpers for consistent JSON response shapes:
+ * Extends {@see Controller}, so the view/redirect/validate/authorize/can
+ * helpers are available too, and adds fluent helpers for consistent JSON
+ * response shapes:
  *
  *   return $this->ok($data);              // 200 { "data": ... }
  *   return $this->created($resource);     // 201 { "data": ... }
@@ -25,7 +25,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
  *
  * Responses always include an "ok" boolean and the HTTP status code.
  */
-abstract class ApiController
+abstract class ApiController extends Controller
 {
     // ── Success responses ─────────────────────────────────────────────
 
@@ -132,30 +132,7 @@ abstract class ApiController
         ], $extra), $status);
     }
 
-    // ── Authorization helpers ─────────────────────────────────────────
-
-    /** Abort with 403 if the current user cannot perform the given ability. */
-    protected function authorize(string $ability, mixed $arguments = []): void
-    {
-        try {
-            $gate = Application::getInstance()->getContainer()->make(Gate::class);
-            $gate->authorize($ability, $arguments);
-        } catch (HttpException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            throw new HttpException(403, "Cette action n'est pas autorisée.");
-        }
-    }
-
-    protected function can(string $ability, mixed $arguments = []): bool
-    {
-        try {
-            $gate = Application::getInstance()->getContainer()->make(Gate::class);
-            return $gate->allows($ability, $arguments);
-        } catch (\Throwable) {
-            return false;
-        }
-    }
+    // Authorization helpers (authorize / can / cannot) are inherited from Controller.
 
     // ── Internal ──────────────────────────────────────────────────────
 

@@ -48,9 +48,14 @@ class QueryBuilder
 
     public function where(string $column, mixed $operator, mixed $value = null): static
     {
-        if ($value === null) {
+        if (func_num_args() === 2) {
             $value = $operator;
             $operator = '=';
+        }
+        if ($value === null) {
+            $isNot = in_array(strtolower((string) $operator), ['!=', '<>', 'is not'], true);
+            $this->wheres[] = "{$column} " . ($isNot ? 'IS NOT NULL' : 'IS NULL');
+            return $this;
         }
         $this->wheres[] = "{$column} {$operator} ?";
         $this->bindings[] = $value;
@@ -59,9 +64,14 @@ class QueryBuilder
 
     public function orWhere(string $column, mixed $operator, mixed $value = null): static
     {
-        if ($value === null) {
+        if (func_num_args() === 2) {
             $value = $operator;
             $operator = '=';
+        }
+        if ($value === null) {
+            $isNot = in_array(strtolower((string) $operator), ['!=', '<>', 'is not'], true);
+            $this->wheres[] = "OR {$column} " . ($isNot ? 'IS NOT NULL' : 'IS NULL');
+            return $this;
         }
         $this->wheres[] = "OR {$column} {$operator} ?";
         $this->bindings[] = $value;
@@ -181,9 +191,14 @@ class QueryBuilder
 
     public function having(string $column, mixed $operator, mixed $value = null): static
     {
-        if ($value === null) {
+        if (func_num_args() === 2) {
             $value = $operator;
             $operator = '=';
+        }
+        if ($value === null) {
+            $isNot = in_array(strtolower((string) $operator), ['!=', '<>', 'is not'], true);
+            $this->havings[] = "{$column} " . ($isNot ? 'IS NOT NULL' : 'IS NULL');
+            return $this;
         }
         $this->havings[] = "{$column} {$operator} ?";
         $this->bindings[] = $value;
@@ -253,16 +268,14 @@ class QueryBuilder
         return (float) $this->aggregate("AVG({$column})");
     }
 
-    public function min(string $column): float|null
+    public function min(string $column): mixed
     {
-        $v = $this->aggregate("MIN({$column})");
-        return $v !== null ? (float) $v : null;
+        return $this->aggregate("MIN({$column})");
     }
 
-    public function max(string $column): float|null
+    public function max(string $column): mixed
     {
-        $v = $this->aggregate("MAX({$column})");
-        return $v !== null ? (float) $v : null;
+        return $this->aggregate("MAX({$column})");
     }
 
     public function pluck(string $column): array
@@ -382,7 +395,7 @@ class QueryBuilder
 
         foreach ($this->wheres as $where) {
             if ($i === 0) {
-                $clauses[] = str_starts_with($where, 'OR ') ? ltrim($where, 'OR ') : $where;
+                $clauses[] = str_starts_with($where, 'OR ') ? substr($where, 3) : $where;
             } else {
                 $clauses[] = str_starts_with($where, 'OR ') ? $where : "AND {$where}";
             }

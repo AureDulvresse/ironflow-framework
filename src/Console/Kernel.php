@@ -77,6 +77,12 @@ class Kernel
             Commands\AboutCommand::class,
             Commands\TinkerCommand::class,
             Commands\MakePolicyCommand::class,
+            Commands\MakeJobCommand::class,
+            Commands\MakeNotificationCommand::class,
+            Commands\MakeMailCommand::class,
+            Commands\MakeTestCommand::class,
+            Commands\QueueWorkCommand::class,
+            Commands\ScheduleRunCommand::class,
         ];
 
         foreach ($commands as $class) {

@@ -240,18 +240,10 @@ class Container
         $exports = $this->moduleExports[$owner] ?? [];
 
         if (!in_array($abstract, $exports, true)) {
-            $short = class_basename($abstract);
+            $short = \class_basename($abstract);
             throw new ContainerException(
                 "[{$short}] belongs to module [{$owner}] which is not exported for module [{$callerModule}]."
             );
         }
     }
-}
-
-// ── Tiny helper used in Container ──────────────────────────────────────────
-
-function class_basename(string $class): string
-{
-    $parts = explode('\\', $class);
-    return end($parts);
 }

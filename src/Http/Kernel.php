@@ -7,6 +7,7 @@ namespace Ironflow\Http;
 use Ironflow\Container;
 use Ironflow\Exceptions\Handler as ExceptionHandler;
 use Ironflow\Exceptions\HttpException;
+use Ironflow\Middleware\MiddlewareResolver;
 use Ironflow\Middleware\Pipeline;
 use Ironflow\Routing\Router;
 use Ironflow\Session\SessionManager;
@@ -30,23 +31,27 @@ class Kernel
     public function handle(Request $request): SymfonyResponse
     {
         try {
+            // Bind the active request into the container so request-scoped
+            // services (e.g. the JWT guard) can resolve it.
+            $this->container->instance(Request::class, $request);
+
             $this->validateAppKey($request);
             $this->bootSession($request);
 
-            $globalMiddlewares = $this->resolveMiddlewareStack(
-                $this->middlewareConfig['global'] ?? []
-            );
+            $aliases = $this->middlewareConfig['aliases'] ?? [];
+            $groups  = $this->middlewareConfig['groups']  ?? [];
+
+            // One resolver, shared semantics: the Router resolves route/group
+            // middleware exactly the way the Kernel resolves the global stack.
+            $resolver = new MiddlewareResolver($aliases, $groups);
+            $this->router->setMiddlewareAliases($aliases);
+            $this->router->setMiddlewareGroups($groups);
+
+            $globalMiddlewares = $resolver->resolve($this->middlewareConfig['global'] ?? []);
 
             // Prepend hot-reload middleware in local/dev mode (handles /__ironflow/ping)
             if ($this->isDevMode()) {
-                array_unshift($globalMiddlewares, \Ironflow\Http\Middleware\HotReloadMiddleware::class);
-            }
-
-            $aliases = $this->middlewareConfig['aliases'] ?? [];
-            $this->router->setMiddlewareAliases($aliases);
-
-            if (method_exists($this->router, 'setMiddlewareGroups')) {
-                $this->router->setMiddlewareGroups($this->middlewareConfig['groups'] ?? []);
+                array_unshift($globalMiddlewares, \Ironflow\Middleware\HotReloadMiddleware::class);
             }
 
             $pipeline = new Pipeline($this->container);
@@ -59,36 +64,6 @@ class Kernel
         } catch (Throwable $e) {
             return $this->exceptionHandler->render($request, $e);
         }
-    }
-
-    /**
-     * Expand group names in a middleware stack to their constituent classes.
-     * FQCNs and aliases pass through unchanged.
-     */
-    private function resolveMiddlewareStack(array $middlewares): array
-    {
-        $groups  = $this->middlewareConfig['groups']  ?? [];
-        $aliases = $this->middlewareConfig['aliases'] ?? [];
-        $result  = [];
-
-        foreach ($middlewares as $m) {
-            if (is_string($m)) {
-                if (isset($groups[$m])) {
-                    // Expand group recursively
-                    foreach ($this->resolveMiddlewareStack($groups[$m]) as $resolved) {
-                        $result[] = $resolved;
-                    }
-                    continue;
-                }
-                if (isset($aliases[$m])) {
-                    $result[] = $aliases[$m];
-                    continue;
-                }
-            }
-            $result[] = $m;
-        }
-
-        return $result;
     }
 
     /**

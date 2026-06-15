@@ -25,7 +25,7 @@ class BelongsToMany extends Relation
         private readonly string $relatedPivotKey,
         mixed $parentKeyValue
     ) {
-        parent::__construct($connection, $related, $foreignPivotKey, 'id', $parentKeyValue);
+        parent::__construct($connection, $related, $foreignPivotKey, $related->getKeyName(), $parentKeyValue);
     }
 
     public function withPivot(string ...$columns): static
@@ -41,6 +41,7 @@ class BelongsToMany extends Relation
         }
 
         $table = $this->related->getTableName();
+        $relatedKey = $this->related->getKeyName();
         $class = get_class($this->related);
         $pivotCols = $this->pivotColumns ? ', ' . implode(', ', array_map(
             fn($c) => "{$this->pivotTable}.{$c} as pivot_{$c}",
@@ -48,7 +49,7 @@ class BelongsToMany extends Relation
         )) : '';
 
         $sql = "SELECT {$table}.*{$pivotCols} FROM {$table} "
-            . "INNER JOIN {$this->pivotTable} ON {$this->pivotTable}.{$this->relatedPivotKey} = {$table}.id "
+            . "INNER JOIN {$this->pivotTable} ON {$this->pivotTable}.{$this->relatedPivotKey} = {$table}.{$relatedKey} "
             . "WHERE {$this->pivotTable}.{$this->foreignPivotKey} = ?";
 
         $rows = $this->connection->select($sql, [$this->parentKeyValue]);
@@ -58,18 +59,20 @@ class BelongsToMany extends Relation
 
     public function eagerLoad(Collection $models, ?callable $constraint): Collection
     {
-        $keys = $models->pluck('id')->filter()->unique()->toArray();
+        $parentKey = $models->isEmpty() ? 'id' : $models->first()->getKeyName();
+        $keys = $models->pluck($parentKey)->filter()->unique()->toArray();
         if (empty($keys)) {
             return new Collection();
         }
 
         $table = $this->related->getTableName();
+        $relatedKey = $this->related->getKeyName();
         $class = get_class($this->related);
         $placeholders = implode(',', array_fill(0, count($keys), '?'));
 
         $sql = "SELECT {$table}.*, {$this->pivotTable}.{$this->foreignPivotKey} as _pivot_parent "
             . "FROM {$table} "
-            . "INNER JOIN {$this->pivotTable} ON {$this->pivotTable}.{$this->relatedPivotKey} = {$table}.id "
+            . "INNER JOIN {$this->pivotTable} ON {$this->pivotTable}.{$this->relatedPivotKey} = {$table}.{$relatedKey} "
             . "WHERE {$this->pivotTable}.{$this->foreignPivotKey} IN ({$placeholders})";
 
         $rows = $this->connection->select($sql, $keys);
@@ -86,8 +89,36 @@ class BelongsToMany extends Relation
             }
         }
 
+        $parentKey = $models->isEmpty() ? 'id' : $models->first()->getKeyName();
         foreach ($models as $model) {
-            $model->setRelation($relation, new Collection($grouped[$model->id] ?? []));
+            $model->setRelation($relation, new Collection($grouped[$model->{$parentKey}] ?? []));
+        }
+    }
+
+    public function eagerLoadCount(Collection $models, string $countKey): void
+    {
+        $parentKey = $models->isEmpty() ? 'id' : $models->first()->getKeyName();
+        $ids = $models->pluck($parentKey)->filter()->unique()->toArray();
+
+        if (empty($ids)) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = "SELECT {$this->pivotTable}.{$this->foreignPivotKey} as _k, COUNT(*) as cnt "
+            . "FROM {$this->pivotTable} "
+            . "WHERE {$this->pivotTable}.{$this->foreignPivotKey} IN ({$placeholders}) "
+            . "GROUP BY {$this->pivotTable}.{$this->foreignPivotKey}";
+        $rows = $this->connection->select($sql, $ids);
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['_k']] = (int) $row['cnt'];
+        }
+
+        foreach ($models as $model) {
+            $parentId = $model->{$parentKey};
+            $model->setRawAttribute($countKey, $map[$parentId] ?? 0);
         }
     }
 
@@ -125,7 +156,7 @@ class BelongsToMany extends Relation
 
     public function toggle(array $ids): void
     {
-        $current = $this->getResults()->pluck('id')->toArray();
+        $current = $this->getResults()->pluck($this->related->getKeyName())->toArray();
         $attach = array_diff($ids, $current);
         $detach = array_intersect($current, $ids);
         $this->attach($attach);
