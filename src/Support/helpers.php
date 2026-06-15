@@ -154,3 +154,57 @@ if (!function_exists('csrf_token')) {
         return app(\Ironflow\Session\SessionManager::class)->csrfToken();
     }
 }
+
+if (!function_exists('logger')) {
+    /** PSR-3 logger. Call with no args to get the logger, or pass a message to log at info level. */
+    function logger(?string $message = null, array $context = []): \Psr\Log\LoggerInterface
+    {
+        $log = app(\Psr\Log\LoggerInterface::class);
+        if ($message !== null) {
+            $log->info($message, $context);
+        }
+        return $log;
+    }
+}
+
+if (!function_exists('json')) {
+    /** Build a JSON response. */
+    function json(mixed $data, int $status = 200, array $headers = []): \Ironflow\Http\JsonResponse
+    {
+        return new \Ironflow\Http\JsonResponse($data, $status, $headers);
+    }
+}
+
+if (!function_exists('cache')) {
+    /**
+     * Access the cache. No args → the CacheManager; one arg → get; two+ → put.
+     */
+    function cache(?string $key = null, mixed $value = null, int $ttl = 3600): mixed
+    {
+        $cache = app(\Ironflow\Cache\CacheManager::class);
+        if ($key === null) {
+            return $cache;
+        }
+        if (func_num_args() === 1) {
+            return $cache->get($key);
+        }
+        $cache->put($key, $value, $ttl);
+        return $value;
+    }
+}
+
+if (!function_exists('dispatch')) {
+    /** Push a job onto the queue. */
+    function dispatch(\Ironflow\Queue\Job $job): int
+    {
+        return app(\Ironflow\Queue\QueueManager::class)->push($job);
+    }
+}
+
+if (!function_exists('event')) {
+    /** Dispatch an event through the event dispatcher. */
+    function event(object $event): void
+    {
+        app(\Ironflow\Events\Dispatcher::class)->dispatch($event);
+    }
+}

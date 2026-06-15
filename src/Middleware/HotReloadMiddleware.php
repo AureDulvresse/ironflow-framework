@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ironflow\Http\Middleware;
+namespace Ironflow\Middleware;
 
 use Ironflow\Application;
 use Ironflow\Http\Request;

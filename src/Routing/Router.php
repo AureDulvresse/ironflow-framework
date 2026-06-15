@@ -8,6 +8,7 @@ use Ironflow\Container;
 use Ironflow\Exceptions\HttpException;
 use Ironflow\Http\FormRequest;
 use Ironflow\Http\Request;
+use Ironflow\Middleware\MiddlewareResolver;
 use Ironflow\Middleware\Pipeline;
 use ReflectionMethod;
 use ReflectionNamedType;
@@ -27,6 +28,9 @@ class Router
 
     /** @var array<string, string> Middleware alias → class name */
     private array $middlewareAliases = [];
+
+    /** @var array<string, array<string>> Middleware group → list of references */
+    private array $middlewareGroups = [];
 
     public function __construct(private readonly Container $container)
     {
@@ -60,9 +64,9 @@ class Router
         return $this->addRoute('DELETE', $uri, $action);
     }
 
-    public function any(string $uri, mixed $action): Route
+    public function any(string $uri, mixed $action): void
     {
-        return $this->addRoute('ANY', $uri, $action);
+        $this->match(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], $uri, $action);
     }
 
     public function match(array $methods, string $uri, mixed $action): void
@@ -85,7 +89,8 @@ class Router
 
     public function resource(string $name, string $controller): void
     {
-        $singular = rtrim($name, 's');
+        $segment = basename($name);
+        $singular = str_ends_with($segment, 's') ? substr($segment, 0, -1) : $segment;
         $prefix = '/' . ltrim($name, '/');
 
         $this->get("{$prefix}", [$controller, 'index'])->name("{$name}.index");
@@ -138,6 +143,11 @@ class Router
     public function setMiddlewareAliases(array $aliases): void
     {
         $this->middlewareAliases = $aliases;
+    }
+
+    public function setMiddlewareGroups(array $groups): void
+    {
+        $this->middlewareGroups = $groups;
     }
 
     public function loadRoutesFrom(string $file): void
@@ -193,15 +203,12 @@ class Router
 
     private function resolveMiddlewares(array $middlewares): array
     {
-        $resolved = [];
-        foreach ($middlewares as $middleware) {
-            // Handle "alias:param1,param2" syntax
-            [$alias, $params] = array_pad(explode(':', $middleware, 2), 2, null);
-
-            $class = $this->middlewareAliases[$alias] ?? $alias;
-            $resolved[] = $params !== null ? "{$class}:{$params}" : $class;
-        }
-        return $resolved;
+        // Use the same resolver as the HTTP Kernel so route, group, and global
+        // middleware all expand groups, map aliases, and preserve ":params"
+        // identically. Aliases that point to groups, and groups nested inside
+        // groups, are handled recursively.
+        return (new MiddlewareResolver($this->middlewareAliases, $this->middlewareGroups))
+            ->resolve($middlewares);
     }
 
     private function callAction(mixed $action, Request $request, array $params): Response
@@ -253,8 +260,15 @@ class Router
                 $args[] = $routeParams[$param->getName()];
             } elseif ($param->isOptional()) {
                 $args[] = $param->getDefaultValue();
-            } else {
+            } elseif ($param->allowsNull()) {
                 $args[] = null;
+            } else {
+                throw new \RuntimeException(sprintf(
+                    'Unable to resolve required parameter [$%s] for controller method %s::%s().',
+                    $param->getName(),
+                    $method->getDeclaringClass()->getName(),
+                    $method->getName()
+                ));
             }
         }
         return $args;

@@ -8,7 +8,7 @@ use Ironflow\Console\Command;
 
 class MakeControllerCommand extends Command
 {
-    protected string $signature = 'make:controller {name?} {--module=} {--resource}';
+    protected string $signature = 'make:controller {name?} {--module=} {--resource} {--api}';
     protected string $description = 'Create a new controller class';
 
     protected function handle(): int
@@ -16,6 +16,7 @@ class MakeControllerCommand extends Command
         $name = $this->argumentOrAsk('name', 'Controller name (e.g. PostController):');
         $module = $this->option('module');
         $resource = (bool) $this->option('resource');
+        $api = (bool) $this->option('api');
 
         if ($module) {
             $path = base_path("modules/{$module}/Controllers/{$name}.php");
@@ -32,15 +33,18 @@ class MakeControllerCommand extends Command
         }
 
         $methods = $resource ? $this->resourceMethods() : $this->basicMethods();
-        $content = $this->stub($ns, $name, $methods);
+        $content = $this->stub($ns, $name, $methods, $api);
 
         file_put_contents($path, $content);
         $this->success("Controller [{$name}] created.");
         return self::SUCCESS;
     }
 
-    private function stub(string $ns, string $name, string $methods): string
+    private function stub(string $ns, string $name, string $methods, bool $api): string
     {
+        $base    = $api ? 'ApiController' : 'Controller';
+        $useBase = "use Ironflow\\Http\\{$base};";
+
         return <<<PHP
 <?php
 
@@ -50,8 +54,9 @@ namespace {$ns};
 
 use Ironflow\\Http\\Request;
 use Ironflow\\Http\\Response;
+{$useBase}
 
-class {$name}
+class {$name} extends {$base}
 {
 {$methods}
 }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Ironflow\Http\Middleware;
+namespace Ironflow\Middleware;
 
 use Ironflow\Http\Request;
 use Symfony\Component\HttpFoundation\Response;

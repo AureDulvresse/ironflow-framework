@@ -118,8 +118,29 @@ class ValidatorInstance
             'confirmed' => $this->getValue($field . '_confirmation') === $value,
             'regex'     => (bool) preg_match((string) $param, (string) $value),
             'in'        => in_array($value, explode(',', (string) $param), true),
+            'not_in'    => !in_array($value, explode(',', (string) $param), true),
             'unique'    => $this->validateUnique($value, (string) $param),
+            'exists'    => $this->validateExists($value, (string) $param),
             'nullable'  => true,
+
+            // ── Extended text rules ──────────────────────────────────
+            'alpha'      => (bool) preg_match('/^[\pL]+$/u', (string) $value),
+            'alpha_num'  => (bool) preg_match('/^[\pL\pN]+$/u', (string) $value),
+            'alpha_dash' => (bool) preg_match('/^[\pL\pN_-]+$/u', (string) $value),
+            'uuid'       => (bool) preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', (string) $value),
+            'ip'         => filter_var($value, FILTER_VALIDATE_IP) !== false,
+            'json'       => $this->isJson($value),
+            'array'      => is_array($value),
+            'digits'     => ctype_digit((string) $value) && mb_strlen((string) $value) === (int) $param,
+            'starts_with' => $this->matchesAny((string) $value, (string) $param, 'starts'),
+            'ends_with'   => $this->matchesAny((string) $value, (string) $param, 'ends'),
+            'same'       => $value === $this->getValue((string) $param),
+            'different'  => $value !== $this->getValue((string) $param),
+            'gt'         => (float) $value >  (float) $this->getValue((string) $param),
+            'gte'        => (float) $value >= (float) $this->getValue((string) $param),
+            'lt'         => (float) $value <  (float) $this->getValue((string) $param),
+            'lte'        => (float) $value <= (float) $this->getValue((string) $param),
+            'between'    => $this->validateBetween($value, (string) $param),
 
             // ── Size rules (file-aware) ──────────────────────────────
             'min' => $isFile
@@ -177,6 +198,49 @@ class ValidatorInstance
             return $value->isValid();
         }
         return $value !== null && $value !== '' && $value !== [];
+    }
+
+    private function isJson(mixed $value): bool
+    {
+        if (!is_string($value)) {
+            return false;
+        }
+        json_decode($value);
+        return json_last_error() === JSON_ERROR_NONE;
+    }
+
+    private function matchesAny(string $value, string $param, string $mode): bool
+    {
+        foreach (array_map('trim', explode(',', $param)) as $needle) {
+            if ($mode === 'starts' && str_starts_with($value, $needle)) {
+                return true;
+            }
+            if ($mode === 'ends' && str_ends_with($value, $needle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function validateBetween(mixed $value, string $param): bool
+    {
+        [$min, $max] = array_pad(explode(',', $param, 2), 2, 0);
+        $size = is_string($value) ? mb_strlen($value) : (float) $value;
+        return $size >= (float) $min && $size <= (float) $max;
+    }
+
+    /** exists:table,column — value must already be present in the table. */
+    private function validateExists(mixed $value, string $param): bool
+    {
+        if ($this->db === null || $value === null || $value === '') {
+            return true;
+        }
+        [$table, $column] = array_pad(explode(',', $param, 2), 2, 'id');
+        $row = $this->db->selectOne(
+            "SELECT COUNT(*) as cnt FROM {$table} WHERE {$column} = ?",
+            [$value]
+        );
+        return ((int) ($row['cnt'] ?? 0)) > 0;
     }
 
     private function validateUnique(mixed $value, string $param): bool
@@ -255,6 +319,25 @@ class ValidatorInstance
             'regex'      => "Le format de {$label} est invalide.",
             'confirmed'  => "La confirmation de {$label} ne correspond pas.",
             'unique'     => "Cette valeur est déjà prise pour {$label}.",
+            'exists'     => "La valeur de {$label} n'existe pas.",
+            'not_in'     => "La valeur de {$label} n'est pas autorisée.",
+            'alpha'      => "Le champ {$label} ne doit contenir que des lettres.",
+            'alpha_num'  => "Le champ {$label} ne doit contenir que des lettres et des chiffres.",
+            'alpha_dash' => "Le champ {$label} ne doit contenir que des lettres, chiffres, tirets et underscores.",
+            'uuid'       => "Le champ {$label} doit être un UUID valide.",
+            'ip'         => "Le champ {$label} doit être une adresse IP valide.",
+            'json'       => "Le champ {$label} doit être du JSON valide.",
+            'array'      => "Le champ {$label} doit être un tableau.",
+            'digits'     => "Le champ {$label} doit comporter {$param} chiffres.",
+            'starts_with' => "Le champ {$label} doit commencer par : {$param}.",
+            'ends_with'  => "Le champ {$label} doit se terminer par : {$param}.",
+            'same'       => "Le champ {$label} doit correspondre à {$param}.",
+            'different'  => "Le champ {$label} doit être différent de {$param}.",
+            'gt'         => "Le champ {$label} doit être supérieur à {$param}.",
+            'gte'        => "Le champ {$label} doit être supérieur ou égal à {$param}.",
+            'lt'         => "Le champ {$label} doit être inférieur à {$param}.",
+            'lte'        => "Le champ {$label} doit être inférieur ou égal à {$param}.",
+            'between'    => "Le champ {$label} doit être compris entre {$param}.",
             'file'       => "Le champ {$label} doit être un fichier valide.",
             'image'      => "Le champ {$label} doit être une image (jpeg, png, gif, bmp, webp).",
             'mimes'      => "Le champ {$label} doit être un fichier de type : {$param}.",

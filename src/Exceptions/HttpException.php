@@ -31,6 +31,17 @@ class HttpException extends RuntimeException
         return $this->headers;
     }
 
+    /** Return a copy carrying the given response headers (merged). */
+    public function withHeaders(array $headers): self
+    {
+        return new self(
+            $this->statusCode,
+            $this->getMessage(),
+            $this->getPrevious(),
+            array_merge($this->headers, $headers)
+        );
+    }
+
     private function defaultMessage(): string
     {
         return match ($this->statusCode) {

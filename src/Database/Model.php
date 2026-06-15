@@ -367,6 +367,7 @@ abstract class Model
         if ($fresh) {
             $this->attributes = $fresh->attributes;
             $this->original = $fresh->original;
+            $this->relations = [];
         }
         return $this;
     }
@@ -375,6 +376,7 @@ abstract class Model
     {
         $clone = clone $this;
         unset($clone->attributes[$this->primaryKey]);
+        $clone->original = [];
         $clone->exists = false;
         return $clone;
     }
@@ -610,7 +612,7 @@ abstract class Model
         // Relations
         foreach ($this->relations as $key => $rel) {
             $result[$key] = $rel instanceof Collection ? $rel->toArray()
-                : ($rel instanceof static ? $rel->toArray() : $rel);
+                : ($rel instanceof Model ? $rel->toArray() : $rel);
         }
 
         return $result;
@@ -626,6 +628,11 @@ abstract class Model
     public function getKey(): int|string
     {
         return $this->attributes[$this->primaryKey] ?? 0;
+    }
+
+    public function getKeyName(): string
+    {
+        return $this->primaryKey;
     }
 
     public function getTableName(): string

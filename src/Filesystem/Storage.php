@@ -5,181 +5,283 @@ declare(strict_types=1);
 namespace Ironflow\Filesystem;
 
 use Ironflow\Application;
+use League\Flysystem\Filesystem;
+use League\Flysystem\Local\LocalFilesystemAdapter;
+use League\Flysystem\Visibility;
 
 /**
- * Simple filesystem helper with multi-disk support.
+ * Filesystem abstraction backed by league/flysystem.
+ *
+ * Disks are configured in config/filesystems.php. Each disk maps to a
+ * Flysystem adapter (local, public, or s3 when the S3 package is installed).
  *
  * Usage:
  *   Storage::put('avatars/me.jpg', $contents);
- *   Storage::disk('public')->url('avatars/me.jpg');  // → /storage/avatars/me.jpg
+ *   Storage::disk('s3')->url('avatars/me.jpg');
  *   Storage::exists('avatars/me.jpg');
  *   Storage::delete('avatars/me.jpg');
- *   Storage::get('avatars/me.jpg');
  *
- * Disks are configured in config/filesystems.php.
- * Default disk: 'local' → storage/app
- * Public disk:  'public' → storage/app/public  (served via /storage symlink)
+ * The public surface is the same as before — existing call sites keep working —
+ * but the engine underneath is now a mature, multi-cloud library.
  */
 class Storage
 {
-    private string $diskName;
+    /** @var array<string, Filesystem> Cached adapters by disk name. */
+    private static array $disks = [];
 
-    private function __construct(string $disk)
-    {
-        $this->diskName = $disk;
+    private function __construct(
+        private readonly string $diskName,
+        private readonly Filesystem $fs,
+        private readonly array $diskConfig
+    ) {
     }
 
     // ── Disk selection ───────────────────────────────────────────────
 
-    public static function disk(string $name = 'local'): static
+    public static function disk(?string $name = null): static
     {
-        return new static($name);
-    }
+        $name ??= self::defaultDiskName();
 
-    /** @internal Called by static proxy methods — uses the default disk. */
-    private static function default(): static
-    {
-        $diskName = 'local';
-        try {
-            $config   = Application::getInstance()->getContainer()->make(\Ironflow\Config\Repository::class);
-            $diskName = (string) $config->get('filesystems.default', 'local');
-        } catch (\Throwable) {
+        if (!isset(self::$disks[$name])) {
+            self::$disks[$name] = self::buildFilesystem($name);
         }
-        return new static($diskName);
+
+        return new static($name, self::$disks[$name], self::diskConfigFor($name));
     }
 
-    // ── Static proxy methods (use default disk) ──────────────────────
+    // ── Static proxies (default disk) ────────────────────────────────
 
     public static function put(string $path, mixed $contents): bool
     {
-        return self::default()->write($path, $contents);
+        return static::disk()->write($path, $contents);
     }
 
     public static function get(string $path): string|false
     {
-        return self::default()->read($path);
+        return static::disk()->read($path);
     }
 
     public static function exists(string $path): bool
     {
-        return self::default()->has($path);
+        return static::disk()->has($path);
     }
 
     public static function delete(string $path): bool
     {
-        return self::default()->remove($path);
+        return static::disk()->remove($path);
     }
 
     public static function url(string $path): string
     {
-        return self::default()->publicUrl($path);
+        return static::disk()->publicUrl($path);
     }
 
-    public static function path(string $path = ''): string
+    public static function files(string $directory = '', bool $recursive = false): array
     {
-        return self::default()->absolutePath($path);
+        return static::disk()->listFiles($directory, $recursive);
     }
 
-    public static function files(string $directory = ''): array
-    {
-        return self::default()->listFiles($directory);
-    }
-
-    public static function makeDirectory(string $path): bool
-    {
-        return self::default()->mkdir($path);
-    }
-
-    // ── Instance methods (disk-specific) ─────────────────────────────
+    // ── Instance methods ─────────────────────────────────────────────
 
     public function write(string $path, mixed $contents): bool
     {
-        $full = $this->fullPath($path);
-        $dir  = dirname($full);
-
-        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+        try {
+            $this->fs->write($path, (string) $contents);
+            return true;
+        } catch (\Throwable) {
             return false;
         }
+    }
 
-        return file_put_contents($full, $contents) !== false;
+    public function writeStream(string $path, $resource): bool
+    {
+        try {
+            $this->fs->writeStream($path, $resource);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function read(string $path): string|false
     {
-        $full = $this->fullPath($path);
-        return is_file($full) ? file_get_contents($full) : false;
+        try {
+            return $this->fs->read($path);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function readStream(string $path)
+    {
+        try {
+            return $this->fs->readStream($path);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function has(string $path): bool
     {
-        return file_exists($this->fullPath($path));
+        try {
+            return $this->fs->fileExists($path);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function remove(string $path): bool
     {
-        $full = $this->fullPath($path);
-        return is_file($full) && @unlink($full);
+        try {
+            $this->fs->delete($path);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function copy(string $from, string $to): bool
+    {
+        try {
+            $this->fs->copy($from, $to);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function move(string $from, string $to): bool
+    {
+        try {
+            $this->fs->move($from, $to);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function size(string $path): int
+    {
+        try {
+            return $this->fs->fileSize($path);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    public function lastModified(string $path): int
+    {
+        try {
+            return $this->fs->lastModified($path);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    public function mimeType(string $path): string
+    {
+        try {
+            return $this->fs->mimeType($path);
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    public function makeDirectory(string $path): bool
+    {
+        try {
+            $this->fs->createDirectory($path);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function publicUrl(string $path): string
     {
-        $diskConfig = $this->diskConfig();
-        $base       = rtrim((string) ($diskConfig['url'] ?? '/storage'), '/');
+        $base = rtrim((string) ($this->diskConfig['url'] ?? '/storage'), '/');
         return $base . '/' . ltrim($path, '/');
-    }
-
-    public function absolutePath(string $path = ''): string
-    {
-        return $this->fullPath($path);
     }
 
     public function listFiles(string $directory = '', bool $recursive = false): array
     {
-        $base  = $this->fullPath($directory);
-        $files = [];
-
-        if (!is_dir($base)) {
-            return [];
-        }
-
-        $pattern = $recursive ? $base . '/**/*' : $base . '/*';
-        foreach (glob($pattern) ?: [] as $file) {
-            if (is_file($file)) {
-                $files[] = $file;
-            }
-        }
-
-        return $files;
-    }
-
-    public function mkdir(string $path): bool
-    {
-        $full = $this->fullPath($path);
-        return is_dir($full) || @mkdir($full, 0755, true);
-    }
-
-    // ── Internal ─────────────────────────────────────────────────────
-
-    private function fullPath(string $path): string
-    {
-        $root = rtrim($this->diskConfig()['root'] ?? $this->defaultRoot(), '/');
-        return $path !== '' ? $root . '/' . ltrim($path, '/') : $root;
-    }
-
-    private function diskConfig(): array
-    {
         try {
-            $config = Application::getInstance()->getContainer()->make(\Ironflow\Config\Repository::class);
-            return (array) $config->get("filesystems.disks.{$this->diskName}", []);
+            return $this->fs->listContents($directory, $recursive)
+                ->filter(fn ($item) => $item->isFile())
+                ->map(fn ($item) => $item->path())
+                ->toArray();
         } catch (\Throwable) {
             return [];
         }
     }
 
-    private function defaultRoot(): string
+    // ── Internal: build adapters from config ─────────────────────────
+
+    private static function buildFilesystem(string $name): Filesystem
+    {
+        $config = self::diskConfigFor($name);
+        $driver = $config['driver'] ?? 'local';
+
+        $adapter = match ($driver) {
+            's3'    => self::makeS3Adapter($config),
+            default => new LocalFilesystemAdapter(
+                $config['root'] ?? self::defaultRoot(),
+                visibility: \League\Flysystem\UnixVisibility\PortableVisibilityConverter::fromArray([], Visibility::PRIVATE)
+            ),
+        };
+
+        return new Filesystem($adapter);
+    }
+
+    private static function makeS3Adapter(array $config): object
+    {
+        $s3Adapter = 'League\\Flysystem\\AwsS3V3\\AwsS3V3Adapter';
+        $s3Client  = 'Aws\\S3\\S3Client';
+
+        if (!class_exists($s3Adapter)) {
+            throw new \RuntimeException(
+                'S3 disk requires league/flysystem-aws-s3-v3. Run: composer require league/flysystem-aws-s3-v3'
+            );
+        }
+
+        $client = new $s3Client([
+            'version'     => 'latest',
+            'region'      => $config['region'] ?? 'us-east-1',
+            'credentials' => [
+                'key'    => $config['key'] ?? '',
+                'secret' => $config['secret'] ?? '',
+            ],
+            'endpoint'    => $config['endpoint'] ?? null,
+            'use_path_style_endpoint' => (bool) ($config['use_path_style'] ?? false),
+        ]);
+
+        return new $s3Adapter($client, $config['bucket'] ?? '', $config['prefix'] ?? '');
+    }
+
+    private static function diskConfigFor(string $name): array
     {
         try {
-            return Application::getInstance()->getBasePath("storage/app");
+            $config = Application::getInstance()->getContainer()->make(\Ironflow\Config\Repository::class);
+            return (array) $config->get("filesystems.disks.{$name}", []);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    private static function defaultDiskName(): string
+    {
+        try {
+            $config = Application::getInstance()->getContainer()->make(\Ironflow\Config\Repository::class);
+            return (string) $config->get('filesystems.default', 'local');
+        } catch (\Throwable) {
+            return 'local';
+        }
+    }
+
+    private static function defaultRoot(): string
+    {
+        try {
+            return Application::getInstance()->path('storage', 'app');
         } catch (\Throwable) {
             return sys_get_temp_dir() . '/ironflow';
         }

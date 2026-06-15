@@ -152,7 +152,7 @@ class Application
         $this->container->instance(ConfigRepository::class, $this->config);
 
         // Load core config files immediately so all services can read them
-        foreach (['app', 'database', 'logging', 'session', 'cache', 'auth', 'middleware', 'filesystems', 'rbac'] as $cfg) {
+        foreach (['app', 'database', 'logging', 'session', 'cache', 'auth', 'middleware', 'filesystems', 'rbac', 'mail', 'queue', 'notifications', 'cors', 'services'] as $cfg) {
             $this->configure($cfg);
         }
 
@@ -227,9 +227,13 @@ class Application
         // Session Manager
         $this->container->singleton(SessionManager::class, fn() => new SessionManager());
 
-        // Cache Manager
+        // Cache Manager (PSR-6 backed via symfony/cache)
         $this->container->singleton(CacheManager::class, function () {
-            return new CacheManager($this->path('cache', 'app'));
+            return new CacheManager(
+                $this->path('cache', 'app'),
+                $this->config->get('cache.default', 'file'),
+                $this->config->get('cache', [])
+            );
         });
 
         // Auth Manager
@@ -266,6 +270,70 @@ class Application
 
         // Storage (static helper, registered so it can be type-hinted if needed)
         $this->container->singleton(Storage::class, fn() => Storage::disk());
+
+        // Rate Limiter (sliding window, cache-backed)
+        $this->container->singleton(\Ironflow\RateLimiting\RateLimiter::class, fn() =>
+            new \Ironflow\RateLimiting\RateLimiter($this->container->make(CacheManager::class))
+        );
+
+        // HTTP Client (outbound requests)
+        $this->container->bind(\Ironflow\Http\HttpClient::class, fn() =>
+            \Ironflow\Http\HttpClient::create($this->config->get('services.http', []))
+        );
+
+        // Mailer
+        $this->container->singleton(\Ironflow\Mail\Mailer::class, fn() =>
+            \Ironflow\Mail\Mailer::fromDsn(
+                $this->config->get('mail.dsn', 'null://null'),
+                $this->config->get('mail', [])
+            )
+        );
+
+        // Queue Manager (database-backed)
+        $this->container->singleton(\Ironflow\Queue\QueueManager::class, fn() =>
+            new \Ironflow\Queue\QueueManager(
+                $this->container->make(Connection::class),
+                $this->config->get('queue.table', 'jobs'),
+                $this->config->get('queue.failed_table', 'failed_jobs')
+            )
+        );
+
+        // Queue Worker
+        $this->container->singleton(\Ironflow\Queue\Worker::class, fn() =>
+            new \Ironflow\Queue\Worker(
+                $this->container->make(\Ironflow\Queue\QueueManager::class),
+                $this->container->make(Logger::class)
+            )
+        );
+
+        // Task Scheduler — shared instance so modules can register events in boot()
+        $this->container->singleton(\Ironflow\Scheduling\Schedule::class, fn() =>
+            new \Ironflow\Scheduling\Schedule($this->container->make(\Ironflow\Queue\QueueManager::class))
+        );
+
+        // Notification Manager
+        $this->container->singleton(\Ironflow\Notifications\NotificationManager::class, fn() =>
+            new \Ironflow\Notifications\NotificationManager(
+                $this->container->make(\Ironflow\Mail\Mailer::class),
+                $this->container->make(Connection::class),
+                $this->config->get('notifications.table', 'notifications')
+            )
+        );
+
+        // Health Manager — register default checks (DB, cache, disk)
+        $this->container->singleton(\Ironflow\Health\HealthManager::class, function () {
+            $manager = new \Ironflow\Health\HealthManager();
+            $manager->register(new \Ironflow\Health\Checks\DatabaseHealthCheck(
+                $this->container->make(Connection::class)
+            ));
+            $manager->register(new \Ironflow\Health\Checks\CacheHealthCheck(
+                $this->container->make(CacheManager::class)
+            ));
+            $manager->register(new \Ironflow\Health\Checks\DiskSpaceHealthCheck(
+                $this->path('storage')
+            ));
+            return $manager;
+        });
     }
 
     public function version(): string

@@ -19,8 +19,8 @@ use Symfony\Component\HttpFoundation\Response;
  *    handle(Request $req, callable $next, ...$params): Response
  *
  *  Hook-style (Django-inspired):
- *    processRequest(Request $req): ?Response   — early-return skips the chain
- *    processResponse(Request $req, Response $res): Response
+ *    processRequest(Request $req, ...$params): ?Response   — early-return skips the chain
+ *    processResponse(Request $req, Response $res, ...$params): Response
  *
  * Pipe syntax:
  *   'App\Middleware\Foo'          — FQCN, no parameters
@@ -65,24 +65,37 @@ class Pipeline
             return function (Request $request) use ($next, $pipe): Response {
                 [$middleware, $params] = $this->resolve($pipe);
 
-                // Hook-style: processRequest / processResponse
-                if (method_exists($middleware, 'processRequest')) {
-                    $early = $middleware->processRequest($request);
-                    if ($early instanceof Response) {
-                        return $early;
+                $hasProcessRequest  = method_exists($middleware, 'processRequest');
+                $hasProcessResponse = method_exists($middleware, 'processResponse');
+
+                // Hook-style: either processRequest and/or processResponse.
+                if ($hasProcessRequest || $hasProcessResponse) {
+                    if ($hasProcessRequest) {
+                        $early = $middleware->processRequest($request, ...$params);
+                        if ($early instanceof Response) {
+                            return $early;
+                        }
                     }
 
                     $response = $next($request);
 
-                    if (method_exists($middleware, 'processResponse')) {
-                        $response = $middleware->processResponse($request, $response);
+                    if ($hasProcessResponse) {
+                        $response = $middleware->processResponse($request, $response, ...$params);
                     }
 
                     return $response;
                 }
 
                 // Onion-style: handle($request, $next, ...$params)
-                return $middleware->handle($request, $next, ...$params);
+                if (method_exists($middleware, 'handle')) {
+                    return $middleware->handle($request, $next, ...$params);
+                }
+
+                throw new \RuntimeException(sprintf(
+                    'Middleware [%s] must define handle($request, $next) or '
+                    . 'processRequest()/processResponse().',
+                    get_debug_type($middleware)
+                ));
             };
         };
     }

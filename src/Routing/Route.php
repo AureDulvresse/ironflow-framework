@@ -84,13 +84,14 @@ class Route
     {
         $uri = $this->uri;
 
-        // Replace {param} and {param?} segments
-        $uri = preg_replace_callback('/\{(\w+)\??\}/', function ($m) use (&$params) {
+        // Replace {param} and {param?} segments, consuming the preceding '/'
+        // so that omitted optional params don't leave a dangling slash.
+        $uri = preg_replace_callback('#/?\{(\w+)\??\}#', function ($m) use (&$params) {
             $key = $m[1];
             if (isset($params[$key])) {
                 $val = $params[$key];
                 unset($params[$key]);
-                return (string) $val;
+                return '/' . (string) $val;
             }
             return '';
         }, $uri);
@@ -99,6 +100,9 @@ class Route
         if (!empty($params)) {
             $uri .= '?' . http_build_query($params);
         }
+
+        // Collapse any duplicate slashes left behind.
+        $uri = preg_replace('#/{2,}#', '/', (string) $uri);
 
         return rtrim((string) $uri, '/') ?: '/';
     }
