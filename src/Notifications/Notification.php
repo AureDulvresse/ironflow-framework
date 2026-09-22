@@ -16,9 +16,9 @@ namespace Ironflow\Notifications;
  *           return ['mail', 'database'];
  *       }
  *
- *       public function toMail(object $notifiable): PendingMail
+ *       public function toMail(object $notifiable, Mailer $mailer): PendingMail
  *       {
- *           return Mail::to($notifiable->email)
+ *           return $mailer->to($notifiable->email)
  *               ->subject('Invoice paid')
  *               ->view('@billing/mail/paid', ['invoice' => $this->invoice]);
  *       }

@@ -40,21 +40,9 @@ class BelongsToMany extends Relation
             return new Collection();
         }
 
-        $table = $this->related->getTableName();
-        $relatedKey = $this->related->getKeyName();
-        $class = get_class($this->related);
-        $pivotCols = $this->pivotColumns ? ', ' . implode(', ', array_map(
-            fn($c) => "{$this->pivotTable}.{$c} as pivot_{$c}",
-            $this->pivotColumns
-        )) : '';
-
-        $sql = "SELECT {$table}.*{$pivotCols} FROM {$table} "
-            . "INNER JOIN {$this->pivotTable} ON {$this->pivotTable}.{$this->relatedPivotKey} = {$table}.{$relatedKey} "
-            . "WHERE {$this->pivotTable}.{$this->foreignPivotKey} = ?";
-
-        $rows = $this->connection->select($sql, [$this->parentKeyValue]);
-
-        return $this->hydrateModels($rows, $class);
+        return $this->baseQuery()
+            ->where("{$this->pivotTable}.{$this->foreignPivotKey}", $this->parentKeyValue)
+            ->get();
     }
 
     public function eagerLoad(Collection $models, ?callable $constraint): Collection
@@ -65,18 +53,38 @@ class BelongsToMany extends Relation
             return new Collection();
         }
 
+        $qb = $this->baseQuery(withPivotParent: true)
+            ->whereIn("{$this->pivotTable}.{$this->foreignPivotKey}", $keys);
+
+        if ($constraint !== null) {
+            $constraint($qb);
+        }
+
+        return $qb->get();
+    }
+
+    /**
+     * Builds the join query via ModelQueryBuilder (rather than raw SQL) so
+     * that the related model's global scopes — e.g. SoftDeletes — are
+     * applied automatically, same as HasOne/HasMany/BelongsTo.
+     */
+    private function baseQuery(bool $withPivotParent = false): ModelQueryBuilder
+    {
         $table = $this->related->getTableName();
         $relatedKey = $this->related->getKeyName();
         $class = get_class($this->related);
-        $placeholders = implode(',', array_fill(0, count($keys), '?'));
 
-        $sql = "SELECT {$table}.*, {$this->pivotTable}.{$this->foreignPivotKey} as _pivot_parent "
-            . "FROM {$table} "
-            . "INNER JOIN {$this->pivotTable} ON {$this->pivotTable}.{$this->relatedPivotKey} = {$table}.{$relatedKey} "
-            . "WHERE {$this->pivotTable}.{$this->foreignPivotKey} IN ({$placeholders})";
+        $columns = ["{$table}.*"];
+        foreach ($this->pivotColumns as $c) {
+            $columns[] = "{$this->pivotTable}.{$c} as pivot_{$c}";
+        }
+        if ($withPivotParent) {
+            $columns[] = "{$this->pivotTable}.{$this->foreignPivotKey} as _pivot_parent";
+        }
 
-        $rows = $this->connection->select($sql, $keys);
-        return $this->hydrateModels($rows, $class);
+        return (new ModelQueryBuilder($this->connection, $table, $class))
+            ->select($columns)
+            ->join($this->pivotTable, "{$this->pivotTable}.{$this->relatedPivotKey}", '=', "{$table}.{$relatedKey}");
     }
 
     public function match(Collection $models, Collection $results, string $relation): void
@@ -95,6 +103,11 @@ class BelongsToMany extends Relation
         }
     }
 
+    /**
+     * Joins to the related table (rather than counting raw pivot rows) so
+     * the related model's global scopes — e.g. SoftDeletes — are honoured:
+     * a soft-deleted tag no longer inflates the count.
+     */
     public function eagerLoadCount(Collection $models, string $countKey): void
     {
         $parentKey = $models->isEmpty() ? 'id' : $models->first()->getKeyName();
@@ -104,12 +117,18 @@ class BelongsToMany extends Relation
             return;
         }
 
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $sql = "SELECT {$this->pivotTable}.{$this->foreignPivotKey} as _k, COUNT(*) as cnt "
-            . "FROM {$this->pivotTable} "
-            . "WHERE {$this->pivotTable}.{$this->foreignPivotKey} IN ({$placeholders}) "
-            . "GROUP BY {$this->pivotTable}.{$this->foreignPivotKey}";
-        $rows = $this->connection->select($sql, $ids);
+        $table = $this->related->getTableName();
+        $relatedKey = $this->related->getKeyName();
+        $class = get_class($this->related);
+
+        $qb = (new ModelQueryBuilder($this->connection, $table, $class))
+            ->select("{$this->pivotTable}.{$this->foreignPivotKey} as _k", 'COUNT(*) as cnt')
+            ->join($this->pivotTable, "{$this->pivotTable}.{$this->relatedPivotKey}", '=', "{$table}.{$relatedKey}")
+            ->whereIn("{$this->pivotTable}.{$this->foreignPivotKey}", $ids)
+            ->groupBy("{$this->pivotTable}.{$this->foreignPivotKey}");
+
+        [$sql, $bindings] = $qb->toSql();
+        $rows = $this->connection->select($sql, $bindings);
 
         $map = [];
         foreach ($rows as $row) {
@@ -133,7 +152,7 @@ class BelongsToMany extends Relation
         }
     }
 
-    public function detach(int|array $ids = null): void
+    public function detach(int|array|null $ids = null): void
     {
         $sql = "DELETE FROM {$this->pivotTable} WHERE {$this->foreignPivotKey} = ?";
         $bindings = [$this->parentKeyValue];
@@ -161,18 +180,5 @@ class BelongsToMany extends Relation
         $detach = array_intersect($current, $ids);
         $this->attach($attach);
         $this->detach($detach);
-    }
-
-    private function hydrateModels(array $rows, string $class): Collection
-    {
-        $models = [];
-        foreach ($rows as $row) {
-            $model = new $class();
-            $model->setRawAttributes($row);
-            $model->setOriginal($row);
-            $model->setExists(true);
-            $models[] = $model;
-        }
-        return new Collection($models);
     }
 }

@@ -6,6 +6,7 @@ namespace Ironflow\Database\Relations;
 
 use Ironflow\Database\Connection;
 use Ironflow\Database\Model;
+use Ironflow\Database\ModelQueryBuilder;
 use Ironflow\Support\Collection;
 
 /**
@@ -36,20 +37,27 @@ abstract class Relation
     abstract public function match(Collection $models, Collection $results, string $relation): void;
 
     /**
-     * Load the count of this relation and set it as an attribute on each model.
+     * Load the count of this relation and set it as an attribute on each
+     * model. Built via ModelQueryBuilder (rather than raw SQL) so the
+     * related model's global scopes — e.g. SoftDeletes — are applied to
+     * the count, same as getResults()/eagerLoad() for HasOne/HasMany.
      */
     public function eagerLoadCount(Collection $models, string $countKey): void
     {
-        $table = $this->related->getTableName();
-        $ids = $models->pluck($this->localKey)->filter()->toArray();
+        $ids = $models->pluck($this->localKey)->filter()->unique()->toArray();
 
         if (empty($ids)) {
             return;
         }
 
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $sql = "SELECT {$this->foreignKey}, COUNT(*) as cnt FROM {$table} WHERE {$this->foreignKey} IN ({$placeholders}) GROUP BY {$this->foreignKey}";
-        $rows = $this->connection->select($sql, $ids);
+        $class = get_class($this->related);
+        $qb = (new ModelQueryBuilder($this->connection, $this->related->getTableName(), $class))
+            ->select($this->foreignKey, 'COUNT(*) as cnt')
+            ->whereIn($this->foreignKey, $ids)
+            ->groupBy($this->foreignKey);
+
+        [$sql, $bindings] = $qb->toSql();
+        $rows = $this->connection->select($sql, $bindings);
 
         $map = [];
         foreach ($rows as $row) {

@@ -6,6 +6,10 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Generates a random 32-byte APP_KEY and writes it to .env (creating the
+ * file if it doesn't exist). `--show` prints the key without writing it.
+ */
 class KeyGenerateCommand extends Command
 {
     protected string $signature = 'key:generate {--show}';

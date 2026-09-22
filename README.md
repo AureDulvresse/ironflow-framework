@@ -46,7 +46,7 @@ IronFlow organise le code en **modules HMVC isolés** avec dépendances déclara
 ```php
 #[Module(
     name: 'blog',
-    imports: ['auth'],                   // modules dont celui-ci dépend
+    imports: [AuthModule::class],        // modules dont celui-ci dépend
     providers: [PostService::class],     // services internes
     exports: [PostService::class],       // API publique exposée aux autres modules
 )]
@@ -57,7 +57,10 @@ class BlogModule extends BaseModule {}
 
 - Un provider est **privé par défaut** : inaccessible hors du module, sauf s'il est listé dans `exports`.
 - Un module ne peut consommer que les providers **exportés** de ses dépendances déclarées dans `imports`.
-- Les violations sont détectées **au démarrage**, pas à l'exécution.
+- Deux niveaux de contrôle, complémentaires :
+  - **Au démarrage** : imports manquants et cycles de dépendances (tri topologique) sont détectés et bloquent le boot.
+  - **À l'exécution** : toute dépendance de constructeur résolue par le conteneur est vérifiée contre les `exports` du module propriétaire — pas seulement au premier niveau, la vérification survit aux chaînes de résolution transitives (service → service → service d'un autre module). Une classe non listée dans `providers:` n'est pas protégée : l'isolation est **opt-in par déclaration explicite**, jamais déduite d'une convention de nommage. `php forge make:controller --module=` ajoute automatiquement le contrôleur généré aux `providers:` de son module.
+  - **Limite connue (v1)** : seule l'injection de constructeur est couverte. Les paramètres injectés directement dans une méthode de contrôleur (`show(Post $post, PostService $service)`) ne bénéficient pas encore de ce contrôle.
 
 ### Graphe de dépendances
 
@@ -107,9 +110,9 @@ class PostService
 ### Liaison manuelle
 
 ```php
-// Dans un ServiceProvider ou un Module::register()
+// Dans Module::register()
 $this->container->bind(CacheInterface::class, RedisCache::class);
-$this->container->singleton(Config::class, fn() => new Config(base_path('config')));
+$this->container->singleton(ConfigRepository::class, fn() => new ConfigRepository(base_path('config')));
 ```
 
 ---
@@ -118,22 +121,24 @@ $this->container->singleton(Config::class, fn() => new Config(base_path('config'
 
 ### Routes basiques
 
+Dans `routes.php` d'un module, `$router` (une vraie instance de `Router`, injectée par le framework — pas une façade) est disponible directement :
+
 ```php
-Router::get('/posts/{id}', [PostController::class, 'show'])
+$router->get('/posts/{id}', [PostController::class, 'show'])
     ->name('posts.show')
     ->middleware('auth')
     ->where('id', '[0-9]+');
 
-Router::post('/posts', [PostController::class, 'store'])
+$router->post('/posts', [PostController::class, 'store'])
     ->middleware(['auth', 'throttle:10,1']);
 ```
 
 ### Groupes et ressources
 
 ```php
-Router::group(['prefix' => '/api/v1', 'middleware' => ['throttle:60']], function () {
-    Router::resource('posts', Api\PostController::class);         // 7 routes RESTful
-    Router::resource('comments', Api\CommentController::class)->only(['index', 'store']);
+$router->group(['prefix' => '/api/v1', 'middleware' => ['throttle:60']], function () use ($router) {
+    $router->resource('posts', Api\PostController::class);    // 7 routes RESTful
+    $router->resource('comments', Api\CommentController::class);
 });
 ```
 
@@ -154,6 +159,23 @@ php forge route:list
 # | POST    | /posts                     | posts.store      | auth,thro…|
 # …
 ```
+
+### Contrôleurs
+
+Le Router résout les contrôleurs via le Container — `Controller` (et `ApiController`, qui en hérite) reçoivent donc `TemplateEngine`, `Router`, `Gate` et la `Request` courante par injection de constructeur, sans résolution ambiante :
+
+```php
+class PostController extends Controller
+{
+    public function show(Post $post): Response
+    {
+        $this->authorize('view', $post);           // utilise $this->gate
+        return $this->view('@blog/posts/show', compact('post'));  // utilise $this->templateEngine
+    }
+}
+```
+
+Un contrôleur qui ajoute ses propres dépendances doit transmettre ces quatre-là à `parent::__construct(...)` — l'injection standard PHP, rien de spécifique au framework.
 
 ---
 
@@ -210,7 +232,7 @@ public function scopePublished(QueryBuilder $query): QueryBuilder
 ### Migrations
 
 ```php
-Schema::create('posts', function (Blueprint $table) {
+Schema::create('posts', function (Table $table) {
     $table->id();
     $table->string('title');
     $table->text('body');
@@ -232,14 +254,14 @@ php forge migrate --fresh --seed
 
 ```php
 Post::creating(fn(Post $post) => $post->slug = Str::slug($post->title));
-Post::deleted(fn(Post $post) => Cache::forget("post:{$post->id}"));
+Post::deleted(fn(Post $post) => app(CacheManager::class)->forget("post:{$post->id}"));
 ```
 
 ---
 
 ## Middlewares
 
-Deux styles au choix — cohérence garantie dans les deux cas.
+Deux styles au choix — cohérence garantie dans les deux cas, orchestrés par le même `Pipeline` (`src/Middleware/Pipeline.php`).
 
 **Style oignon (recommandé)** :
 
@@ -256,17 +278,56 @@ class AuthMiddleware
 }
 ```
 
-**Style Django (hooks)** :
+**Style Django (hooks)** — trois hooks optionnels sur la même classe, comme `process_request`/`process_response`/`process_exception` en Django :
 
 ```php
 class LogMiddleware
 {
-    public function processRequest(Request $request): ?Response  { /* ... */ }
+    public function processRequest(Request $request): ?Response  { /* ... */ }             // early-return court-circuite la suite
     public function processResponse(Request $request, Response $response): Response { /* ... */ }
+    public function processException(Request $request, \Throwable $e): ?Response {          // capture une exception venue
+        return null;                                                                        // de plus loin dans le pipeline ;
+    }                                                                                        // null = laisse remonter
 }
 ```
 
-Middlewares globaux définis dans `config/http.php`, alias par route enregistrés dans le router.
+`processException` ne concerne que le style hooks — le style oignon garde le contrôle total et peut déjà entourer `$next($request)` de son propre `try/catch`. Une exception récupérée traverse quand même `processResponse` normalement, exactement comme une réponse ordinaire.
+
+Middlewares globaux définis dans `config/middleware.php` (clé `aliases`/`groups`/`global`), alias par route enregistrés dans le router.
+
+### Ordre recommandé (façon Django)
+
+Django documente explicitement pourquoi l'ordre de `MIDDLEWARE` compte — même logique ici :
+
+```text
+HandleCors, SecurityHeaders, StartSession, ShareErrorsFromSession,
+VerifyCsrfToken, SanitizeInput, TrimStrings, ThrottleRequests
+```
+
+- **CORS en premier** : peut court-circuiter la requête entière sur un preflight `OPTIONS`, avant tout le reste.
+- **Session avant CSRF** : le token CSRF vit en session, donc `StartSession` doit tourner avant `VerifyCsrfToken`.
+- **Sanitize/Trim avant le contrôleur** : les middlewares suivants (throttle, contrôleur) doivent voir des données déjà nettoyées.
+
+### Shield — sécurité HTTP (inspiré d'AdonisJS)
+
+`SecurityHeaders` (headers, CSP, HSTS) et `VerifyCsrfToken` reçoivent une config typée unique, `Ironflow\Http\Shield\ShieldConfig`, construite une fois depuis `config/shield.php` :
+
+```php
+// config/shield.php
+return [
+    'headers' => ['X-Frame-Options' => 'DENY'],   // fusionné sur les défauts ; false = omettre
+    'hsts'    => ['max_age' => 31536000, 'include_subdomains' => true, 'preload' => false],
+    'csp'     => [
+        'enabled'     => true,
+        'preset'      => 'strict',                // 'strict' | 'relaxed'
+        'directives'  => ['script-src' => ['https://cdn.example.com']],
+        'report_only' => false,
+    ],
+    'csrf_except' => ['api/*', 'webhooks/stripe'],
+];
+```
+
+Contrairement aux façades supprimées, `ShieldConfig` est un objet injecté par constructeur — pas de résolution ambiante, pas de `try/catch` qui masque une vraie panne de configuration. CORS reste un souci distinct (`HandleCors`, config `cors.php`) — même choix qu'Adonis, qui sépare `@adonisjs/shield` de `@adonisjs/cors`.
 
 ---
 
@@ -387,7 +448,7 @@ Chaque composant externe est **wrappé derrière nos propres interfaces** dans `
 - [x] CSRF, middlewares globaux et par-route
 - [x] Bus d'événements découplé
 - [x] Extension Twig maison + view composers
-- [ ] Cache — facade unifiée, drivers file/redis
+- [ ] Cache — interface unifiée, drivers file/redis
 - [ ] File d'attente de jobs (queue)
 - [ ] WebSockets / diffusion temps réel
 - [ ] Documentation complète avec recettes

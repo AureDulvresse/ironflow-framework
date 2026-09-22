@@ -9,6 +9,11 @@ use Symfony\Component\HttpFoundation\RedirectResponse as SymfonyRedirect;
 
 /**
  * Redirect response with named-route support and back() helper.
+ *
+ * Inside a Controller, prefer `$this->redirectToRoute(...)` — it uses the
+ * Controller's own constructor-injected Router. route() below resolves the
+ * Router ambiently via Application::getInstance() and exists for contexts
+ * with no DI available at all.
  */
 class RedirectResponse extends SymfonyRedirect
 {

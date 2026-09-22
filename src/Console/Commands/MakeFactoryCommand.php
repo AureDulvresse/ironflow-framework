@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new model Factory class.
+ */
 class MakeFactoryCommand extends Command
 {
     protected string $signature = 'make:factory {name?} {--module=}';
@@ -13,8 +16,8 @@ class MakeFactoryCommand extends Command
 
     protected function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Factory name (e.g. PostFactory):');
-        $module = $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Factory name (e.g. PostFactory):'));
+        $module = $this->moduleOption();
 
         $path = $module
             ? base_path("modules/{$module}/Database/Factories/{$name}.php")

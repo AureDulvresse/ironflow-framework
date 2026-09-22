@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Ironflow\Console\Commands;
 
-use Ironflow\Application;
 use Ironflow\Console\Command;
+use Ironflow\Container;
 use Ironflow\Database\Connection;
 use Ironflow\Module\ModuleManager;
 
@@ -17,9 +17,13 @@ class AboutCommand extends Command
     protected string $signature   = 'about';
     protected string $description = 'Display information about the IronFlow application';
 
+    public function __construct(private readonly Container $container)
+    {
+        parent::__construct();
+    }
+
     protected function handle(): int
     {
-        $app     = Application::getInstance();
         $version = $_ENV['APP_VERSION'] ?? '0.2.0';
 
         $this->newLine();
@@ -47,7 +51,7 @@ class AboutCommand extends Command
         $this->output->writeln('   <options=bold>Database</>');
         try {
             /** @var Connection $db */
-            $db  = $app->getContainer()->make(Connection::class);
+            $db  = $this->container->make(Connection::class);
             $cls = get_class($db->getPlatform());
             $platform = substr($cls, (int) strrpos($cls, '\\') + 1);
             $this->twoColumnDetail('   Driver', $platform);
@@ -60,7 +64,7 @@ class AboutCommand extends Command
         $this->output->writeln('   <options=bold>Modules</>');
         try {
             /** @var ModuleManager $manager */
-            $manager = $app->getContainer()->make(ModuleManager::class);
+            $manager = $this->container->make(ModuleManager::class);
             $modules = $manager->getLoadedModules();
             if (empty($modules)) {
                 $this->output->writeln('   <fg=gray>(none)</>');

@@ -12,13 +12,13 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 /**
  * Fluent HTTP client — a thin, batteries-included wrapper around
  * symfony/http-client. Never import Symfony's client directly in app code;
- * resolve this service (or use the `Http` facade) instead.
+ * inject this service via constructor instead.
  *
- * Usage:
- *   Http::get('https://api.example.com/users');
- *   Http::withToken($jwt)->post($url, ['json' => $payload])->json();
- *   Http::asForm()->post($url, ['body' => ['a' => 1]]);
- *   Http::retry(3)->timeout(5)->get($url)->json('data.items');
+ * Usage (inject HttpClient via constructor):
+ *   $http->get('https://api.example.com/users');
+ *   $http->withToken($jwt)->post($url, ['json' => $payload])->json();
+ *   $http->asForm()->post($url, ['body' => ['a' => 1]]);
+ *   $http->retry(3)->timeout(5)->get($url)->json('data.items');
  */
 class HttpClient
 {

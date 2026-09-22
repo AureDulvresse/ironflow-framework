@@ -182,7 +182,7 @@ class ValidatorInstance
             'dimensions' => $isFile && $value->isValid()
                 && $this->validateDimensions($value, (string) $param),
 
-            default => true,
+            default => throw new \InvalidArgumentException("Unknown validation rule [{$ruleName}]."),
         };
 
         if (!$passed) {

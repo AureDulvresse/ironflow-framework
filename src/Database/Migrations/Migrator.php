@@ -34,15 +34,23 @@ class Migrator
         foreach ($pending as $file) {
             $migration = $this->resolveMigration($file);
             $t0 = hrtime(true);
-            $migration->up();
+
+            // up() and the tracking insert succeed or fail together — a
+            // migration that partially applies before throwing must not be
+            // marked as ran, or it would silently be skipped on retry while
+            // leaving the schema half-changed. (MySQL DDL still auto-commits
+            // regardless — this only buys atomicity where the driver supports
+            // transactional DDL, e.g. SQLite/PostgreSQL, but is harmless elsewhere.)
+            $this->db->transaction(function () use ($migration, $file, $batch): void {
+                $migration->up();
+                $this->db->insert('migrations', [
+                    'migration' => basename($file, '.php'),
+                    'batch' => $batch,
+                    'ran_at' => date('Y-m-d H:i:s'),
+                ]);
+            });
+
             $ms = (int) round((hrtime(true) - $t0) / 1_000_000);
-
-            $this->db->insert('migrations', [
-                'migration' => basename($file, '.php'),
-                'batch' => $batch,
-                'ran_at' => date('Y-m-d H:i:s'),
-            ]);
-
             $ran[] = ['file' => basename($file), 'ms' => $ms];
         }
 
@@ -71,10 +79,13 @@ class Migrator
 
             $migration = $this->resolveMigration($file);
             $t0 = hrtime(true);
-            $migration->down();
-            $ms = (int) round((hrtime(true) - $t0) / 1_000_000);
 
-            $this->db->statement('DELETE FROM migrations WHERE migration = ?', [$row['migration']]);
+            $this->db->transaction(function () use ($migration, $row): void {
+                $migration->down();
+                $this->db->statement('DELETE FROM migrations WHERE migration = ?', [$row['migration']]);
+            });
+
+            $ms = (int) round((hrtime(true) - $t0) / 1_000_000);
             $rolledBack[] = ['file' => basename($file), 'ms' => $ms];
         }
 

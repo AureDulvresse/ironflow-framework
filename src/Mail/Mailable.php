@@ -11,6 +11,13 @@ use Symfony\Component\Mime\Email;
 /**
  * Base class for reusable, testable email messages.
  *
+ * Mailable objects are instantiated directly by application code (`new
+ * WelcomeMail($user)`), not resolved through the Container — so renderView()
+ * resolves TemplateEngine ambiently via Application::getInstance() rather
+ * than through constructor injection. Same category as Response::view()/
+ * RedirectResponse::route(): an accepted escape hatch for a context with no
+ * natural DI entry point, not an oversight.
+ *
  * Subclass and implement build():
  *
  *   class WelcomeMail extends Mailable

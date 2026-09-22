@@ -6,6 +6,10 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new API Resource class (or a ResourceCollection with
+ * `--collection`).
+ */
 class MakeResourceCommand extends Command
 {
     protected string $signature = 'make:resource {name? : Class name (e.g. PostResource)} {--collection : Generate a ResourceCollection instead} {--module= : Target module}';
@@ -13,9 +17,9 @@ class MakeResourceCommand extends Command
 
     public function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Resource name (e.g. PostResource):');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Resource name (e.g. PostResource):'));
         $collection = (bool) $this->option('collection');
-        $module = (string) $this->option('module');
+        $module = (string) ($this->moduleOption() ?? '');
 
         [$namespace, $dir] = $this->resolveTarget($name, $module);
         $class = class_basename($name);

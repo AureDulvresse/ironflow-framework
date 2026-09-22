@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new Seeder class.
+ */
 class MakeSeederCommand extends Command
 {
     protected string $signature = 'make:seeder {name?} {--module=}';
@@ -13,8 +16,8 @@ class MakeSeederCommand extends Command
 
     protected function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Seeder name (e.g. UserSeeder):');
-        $module = $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Seeder name (e.g. UserSeeder):'));
+        $module = $this->moduleOption();
 
         $path = $module
             ? base_path("modules/{$module}/Database/Seeders/{$name}.php")

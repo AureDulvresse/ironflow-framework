@@ -20,18 +20,18 @@ class MakePolicyCommand extends Command
 
     protected function handle(): int
     {
-        $name   = (string) $this->argument('name');
+        $name   = $this->validClassName((string) $this->argument('name'));
         $model  = (string) ($this->option('model') ?? '');
-        $module = (string) ($this->option('module') ?? '');
+        $module = $this->moduleOption();
 
         $className = str_ends_with($name, 'Policy') ? $name : $name . 'Policy';
 
-        if ($module !== '') {
+        if ($module !== null) {
             $namespace = "Modules\\{$module}\\Policies";
-            $dir       = $this->basePath("modules/{$module}/Policies");
+            $dir       = base_path("modules/{$module}/Policies");
         } else {
             $namespace = 'App\\Policies';
-            $dir       = $this->basePath('app/Policies');
+            $dir       = base_path('app/Policies');
         }
 
         if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
@@ -48,12 +48,16 @@ class MakePolicyCommand extends Command
 
         file_put_contents($file, $this->buildStub($namespace, $className, $model));
 
-        $rel = str_replace($this->basePath() . DIRECTORY_SEPARATOR, '', $file);
+        $rel = str_replace(base_path() . DIRECTORY_SEPARATOR, '', $file);
         $this->success("Policy created: <options=bold>{$rel}</>");
 
         if ($model !== '') {
             $modelBase = basename(str_replace('\\', '/', $model));
             $this->info("Register it: Gate::policy({$modelBase}::class, {$className}::class)");
+        }
+
+        if ($module !== null) {
+            $this->registerAsProvider($module, "{$namespace}\\{$className}");
         }
 
         return 0;
@@ -112,9 +116,4 @@ class {$className} extends Policy
 PHP;
     }
 
-    private function basePath(string $path = ''): string
-    {
-        $base = \Ironflow\Application::getInstance()->getBasePath();
-        return $path ? $base . DIRECTORY_SEPARATOR . ltrim($path, '/\\') : $base;
-    }
 }

@@ -97,3 +97,16 @@ test('named URL generation', function () {
     $this->router->get('/profile/{user}', fn () => null)->name('profile');
     expect($this->router->route('profile', ['user' => 'alice']))->toBe('/profile/alice');
 });
+
+test('getCurrentRoute is null until dispatch() matches a route', function () {
+    expect($this->router->getCurrentRoute())->toBeNull();
+});
+
+test('getCurrentRoute reflects the most recently dispatched route', function () {
+    $this->router->get('/ping', fn () => new \Ironflow\Http\Response('pong'))->name('ping');
+
+    $this->router->dispatch(\Ironflow\Http\Request::create('/ping'));
+
+    expect($this->router->getCurrentRoute())->not->toBeNull();
+    expect($this->router->getCurrentRoute()->getName())->toBe('ping');
+});

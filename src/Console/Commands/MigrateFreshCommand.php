@@ -8,6 +8,11 @@ use Ironflow\Console\Command;
 use Ironflow\Database\Connection;
 use Ironflow\Database\Migrations\Migrator;
 
+/**
+ * Drops every table and re-runs all migrations from scratch, optionally
+ * seeding afterwards (`--seed`). Destructive — asks for confirmation
+ * before proceeding.
+ */
 class MigrateFreshCommand extends Command
 {
     protected string $signature = 'migrate:fresh {--seed}';

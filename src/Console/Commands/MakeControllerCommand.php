@@ -6,6 +6,11 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new controller class — plain, resourceful (`--resource`), or
+ * API-only (`--api`) — and registers it in the target module's
+ * `providers:` when `--module` is used.
+ */
 class MakeControllerCommand extends Command
 {
     protected string $signature = 'make:controller {name?} {--module=} {--resource} {--api}';
@@ -13,8 +18,8 @@ class MakeControllerCommand extends Command
 
     protected function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Controller name (e.g. PostController):');
-        $module = $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Controller name (e.g. PostController):'));
+        $module = $this->moduleOption();
         $resource = (bool) $this->option('resource');
         $api = (bool) $this->option('api');
 
@@ -37,6 +42,11 @@ class MakeControllerCommand extends Command
 
         file_put_contents($path, $content);
         $this->success("Controller [{$name}] created.");
+
+        if ($module) {
+            $this->registerAsProvider($module, "{$ns}\\{$name}");
+        }
+
         return self::SUCCESS;
     }
 

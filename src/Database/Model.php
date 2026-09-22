@@ -40,6 +40,9 @@ abstract class Model
     /** @var array<string, callable> Global scopes applied to every query */
     protected static array $globalScopes = [];
 
+    /** @var array<class-string, true> Classes whose boot{Trait}() hooks have already run. */
+    private static array $booted = [];
+
     // ─────────────────────── State ───────────────────────────────────
 
     private array $attributes = [];
@@ -51,11 +54,58 @@ abstract class Model
 
     public function __construct(array $attributes = [])
     {
+        static::bootIfNotBooted();
         $this->fill($attributes);
     }
 
     public static function boot(): void
     {
+    }
+
+    /**
+     * Runs boot() and every boot{Trait}() hook (e.g. bootSoftDeletes()) for
+     * this class, once. Traits register their behavior (like a global scope)
+     * from these hooks rather than at class-definition time, since PHP traits
+     * have no load-time hook of their own to run code automatically.
+     */
+    protected static function bootIfNotBooted(): void
+    {
+        if (isset(self::$booted[static::class])) {
+            return;
+        }
+        self::$booted[static::class] = true;
+
+        static::boot();
+
+        foreach (self::classUsesRecursive(static::class) as $trait) {
+            $method = 'boot' . class_basename($trait);
+            if (method_exists(static::class, $method)) {
+                static::$method();
+            }
+        }
+    }
+
+    /** @return array<class-string, class-string> Traits used by $class, its parents, and traits-of-traits. */
+    private static function classUsesRecursive(string $class): array
+    {
+        $traits = [];
+        foreach ((array_reverse(class_parents($class) ?: []) + [$class => $class]) as $c) {
+            $traits += class_uses($c) ?: [];
+        }
+        foreach ($traits as $trait) {
+            $traits += self::traitUsesRecursive($trait);
+        }
+        return $traits;
+    }
+
+    /** @return array<class-string, class-string> */
+    private static function traitUsesRecursive(string $trait): array
+    {
+        $traits = class_uses($trait) ?: [];
+        foreach ($traits as $t) {
+            $traits += self::traitUsesRecursive($t);
+        }
+        return $traits;
     }
 
     protected static function getTable(): string
@@ -72,9 +122,17 @@ abstract class Model
     /** @var Connection|null Overridden for test isolation via setConnection() */
     private static ?Connection $testConnection = null;
 
+    /** @var Dispatcher|null Overridden for tests that want to assert on model events via setDispatcher() */
+    private static ?Dispatcher $testDispatcher = null;
+
     public static function setConnection(Connection $connection): void
     {
         self::$testConnection = $connection;
+    }
+
+    public static function setDispatcher(?Dispatcher $dispatcher): void
+    {
+        self::$testDispatcher = $dispatcher;
     }
 
     protected static function getConnection(): Connection
@@ -87,11 +145,15 @@ abstract class Model
 
     protected static function getDispatcher(): ?Dispatcher
     {
-        try {
-            return Application::getInstance()->getContainer()->make(Dispatcher::class);
-        } catch (\Throwable) {
+        if (self::$testDispatcher !== null) {
+            return self::$testDispatcher;
+        }
+        if (self::$testConnection !== null) {
+            // Test-isolation mode (setConnection() used, no Application booted)
+            // — event dispatch is opt-in here via setDispatcher(), not required.
             return null;
         }
+        return Application::getInstance()->getContainer()->make(Dispatcher::class);
     }
 
     // ─────────────────────── Filling ─────────────────────────────────
@@ -227,27 +289,20 @@ abstract class Model
         };
     }
 
+    /**
+     * Backed by Ironflow\Support\Crypto (AES-256-GCM, authenticated). Throws
+     * if APP_KEY is not configured — a prior version of this cast silently
+     * stored/read the value in plaintext instead, which is equivalent to
+     * not encrypting the column at all.
+     */
     private function decryptCast(string $value): string
     {
-        $key = $_ENV['APP_KEY'] ?? '';
-        if (empty($key)) {
-            return $value;
-        }
-        $decoded = base64_decode($value);
-        $iv = substr($decoded, 0, 16);
-        $cipher = substr($decoded, 16);
-        return (string) openssl_decrypt($cipher, 'AES-256-CBC', $key, 0, $iv);
+        return \Ironflow\Support\Crypto::decrypt($value);
     }
 
     private function encryptCast(string $value): string
     {
-        $key = $_ENV['APP_KEY'] ?? '';
-        if (empty($key)) {
-            return $value;
-        }
-        $iv = random_bytes(16);
-        $cipher = (string) openssl_encrypt($value, 'AES-256-CBC', $key, 0, $iv);
-        return base64_encode($iv . $cipher);
+        return \Ironflow\Support\Crypto::encrypt($value);
     }
 
     // ─────────────────────── Dirty tracking ──────────────────────────
@@ -425,30 +480,49 @@ abstract class Model
 
     public static function firstOrCreate(array $attributes, array $values = []): static
     {
-        $q = static::query();
-        foreach ($attributes as $k => $v) {
-            $q->where($k, $v);
-        }
-        $model = $q->first();
-        if ($model === null) {
-            $model = static::create(array_merge($attributes, $values));
-        }
-        return $model;
+        return self::firstWhere($attributes) ?? self::createOrRecoverFromConflict($attributes, $values);
     }
 
     public static function updateOrCreate(array $attributes, array $values = []): static
+    {
+        $model = self::firstWhere($attributes) ?? self::createOrRecoverFromConflict($attributes, $values);
+        $model->fill($values)->save();
+        return $model;
+    }
+
+    private static function firstWhere(array $attributes): ?static
     {
         $q = static::query();
         foreach ($attributes as $k => $v) {
             $q->where($k, $v);
         }
-        $model = $q->first();
-        if ($model === null) {
-            $model = static::create(array_merge($attributes, $values));
-        } else {
-            $model->fill($values)->save();
+        return $q->first();
+    }
+
+    /**
+     * The read-then-write in firstOrCreate()/updateOrCreate() has a race
+     * window between the SELECT and the INSERT: two concurrent calls can
+     * both find nothing and both attempt to create the row. This cannot be
+     * made atomic from application code alone — it requires a unique
+     * constraint on $attributes at the database level. Given one, the
+     * loser's INSERT fails with a UniqueConstraintViolationException
+     * instead of silently creating a duplicate row; that failure is caught
+     * here and resolved by re-reading the row the winner just created,
+     * rather than crashing the request. Without such a constraint, this
+     * still can't prevent duplicates — the same limitation Laravel's
+     * equivalent methods have.
+     */
+    private static function createOrRecoverFromConflict(array $attributes, array $values): static
+    {
+        try {
+            return static::create(array_merge($attributes, $values));
+        } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException $e) {
+            $model = self::firstWhere($attributes);
+            if ($model === null) {
+                throw $e;
+            }
+            return $model;
         }
-        return $model;
     }
 
     public static function all(): Collection
@@ -466,9 +540,11 @@ abstract class Model
 
     // ─────────────────────── Query ───────────────────────────────────
 
-    public static function query(): ModelQueryBuilder
+    /** @param string[] $withoutGlobalScopes Names of global scopes (as registered via addGlobalScope()) to skip. */
+    public static function query(array $withoutGlobalScopes = []): ModelQueryBuilder
     {
-        return new ModelQueryBuilder(static::getConnection(), static::getTable(), static::class);
+        static::bootIfNotBooted();
+        return new ModelQueryBuilder(static::getConnection(), static::getTable(), static::class, $withoutGlobalScopes);
     }
 
     /** Shortcut to start a query with eager-loads. */

@@ -15,14 +15,14 @@ use Symfony\Component\Mime\Email;
  * Configure via config/mail.php (DSN built from MAIL_* env vars):
  *   'dsn' => env('MAIL_DSN', 'smtp://localhost:1025')
  *
- * Usage:
- *   Mail::to('jane@example.com')
+ * Usage (inject Mailer via constructor):
+ *   $mailer->to('jane@example.com')
  *       ->subject('Welcome')
  *       ->view('@blog/emails/welcome', ['user' => $user])
  *       ->send();
  *
  *   // Or send a Mailable object:
- *   Mail::send(new WelcomeMail($user));
+ *   $mailer->send(new WelcomeMail($user));
  */
 class Mailer
 {

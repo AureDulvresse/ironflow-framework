@@ -6,6 +6,7 @@ namespace Ironflow\Template;
 
 use Ironflow\Application;
 use Ironflow\Container;
+use Ironflow\Routing\Router;
 use Ironflow\Template\ComponentRegistry;
 use Twig\Extension\AbstractExtension;
 use Twig\Extension\GlobalsInterface;
@@ -15,15 +16,23 @@ use Twig\TwigTest;
 
 /**
  * Twig extension exposing all IronFlow helpers:
- * functions (route, asset, csrf_token, auth_user, config, old, errors, ...),
+ * functions (route, asset, csrf_token, auth_user, config, old, errors, current_route, ...),
  * filters (truncate, slug, markdown, time_ago, money),
  * tests (admin),
- * globals (app, current_route).
+ * globals (app).
  */
 class FrameworkExtension extends AbstractExtension implements GlobalsInterface
 {
+    private readonly Application $app;
+    private readonly Router $router;
+
     public function __construct(private readonly Container $container)
     {
+        // Resolved once at construction from the injected Container — not the
+        // global Application::getInstance() singleton — so a misconfiguration
+        // fails fast here instead of being re-resolved ambiently on every call.
+        $this->app = $container->make(Application::class);
+        $this->router = $container->make(Router::class);
     }
 
     // ──────────────────────── Functions ─────────────────────────────
@@ -51,7 +60,14 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
             new TwigFunction('can',    [$this, 'funcCan']),
             new TwigFunction('cannot', [$this, 'funcCannot']),
             new TwigFunction('gate',   [$this, 'funcGate']),
+            new TwigFunction('current_route', [$this, 'funcCurrentRoute']),
         ];
+    }
+
+    /** The name of the currently dispatched route, or null (e.g. 404, CLI render). */
+    public function funcCurrentRoute(): ?string
+    {
+        return $this->router->getCurrentRoute()?->getName();
     }
 
     public function funcRoute(string $name, array $params = []): string
@@ -61,7 +77,7 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
 
     public function funcAsset(string $path): string
     {
-        $publicPath = Application::getInstance()->path('public', $path);
+        $publicPath = $this->app->path('public', $path);
         $mtime = is_file($publicPath) ? filemtime($publicPath) : 0;
         $base = rtrim((string) ($_ENV['APP_URL'] ?? ''), '/');
         return $base . '/' . ltrim($path, '/') . ($mtime ? "?v={$mtime}" : '');
@@ -75,8 +91,7 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
     {
         static $manifest = null;
 
-        $app = Application::getInstance();
-        $hotFilePath = $app->path('public', 'build/hot');
+        $hotFilePath = $this->app->path('public', 'build/hot');
 
         // Vite dev-server HMR mode
         if (is_file($hotFilePath)) {
@@ -86,7 +101,7 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
 
         // Production: read Vite 5+ manifest (.vite/manifest.json)
         if ($manifest === null) {
-            $manifestPath = $app->path('public', 'build/.vite/manifest.json');
+            $manifestPath = $this->app->path('public', 'build/.vite/manifest.json');
             $manifest = is_file($manifestPath)
                 ? (json_decode((string) file_get_contents($manifestPath), true) ?? [])
                 : [];
@@ -230,12 +245,11 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
      */
     public function funcCan(string $ability, mixed ...$arguments): bool
     {
-        try {
-            $gate = $this->container->make(\Ironflow\Auth\Gate::class);
-            return $gate->allows($ability, empty($arguments) ? [] : $arguments);
-        } catch (\Throwable) {
-            return false;
-        }
+        // No try/catch: a Gate resolution failure is a real misconfiguration and
+        // must surface as an error, not silently read as "permission denied" —
+        // the two are indistinguishable to a template author otherwise.
+        $gate = $this->container->make(\Ironflow\Auth\Gate::class);
+        return $gate->allows($ability, empty($arguments) ? [] : $arguments);
     }
 
     public function funcCannot(string $ability, mixed ...$arguments): bool
@@ -365,10 +379,6 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
 
     public function getGlobals(): array
     {
-        $app = Application::getInstance();
-
-        $currentRoute = null;
-
         return [
             'app' => [
                 'name' => $_ENV['APP_NAME'] ?? 'IronFlow',
@@ -376,7 +386,6 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
                 'debug' => (bool) ($_ENV['APP_DEBUG'] ?? false),
                 'version' => $_ENV['APP_VERSION'] ?? '0.1.0',
             ],
-            'current_route' => $currentRoute,
         ];
     }
 }

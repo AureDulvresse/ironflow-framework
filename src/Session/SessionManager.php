@@ -21,7 +21,18 @@ class SessionManager
 
     public function __construct()
     {
-        $storage = new NativeSessionStorage(['cookie_httponly' => true, 'cookie_samesite' => 'lax']);
+        // Same local/dev detection as Http\Kernel::isDevMode() and
+        // Middleware\HotReloadMiddleware::isDevMode() — Secure is on by
+        // default and only dropped for local development.
+        $env   = strtolower((string) ($_ENV['APP_ENV'] ?? 'production'));
+        $debug = filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $secure = !($env === 'local' || $debug);
+
+        $storage = new NativeSessionStorage([
+            'cookie_httponly' => true,
+            'cookie_samesite' => 'lax',
+            'cookie_secure'   => $secure,
+        ]);
         $this->session = new Session($storage);
     }
 
@@ -93,7 +104,13 @@ class SessionManager
     public function csrfToken(): string
     {
         if (!$this->started) {
-            return '';
+            // Failing loud here matters: a silent '' would make an empty
+            // submitted _token pass hash_equals('', '') in VerifyCsrfToken —
+            // a real CSRF bypass if the pipeline ever runs without
+            // StartSession ahead of it, rather than a visible misconfiguration.
+            throw new \RuntimeException(
+                'Session has not been started — csrfToken() requires StartSession to run first.'
+            );
         }
         if (!$this->session->has('_csrf_token')) {
             $this->session->set('_csrf_token', bin2hex(random_bytes(32)));

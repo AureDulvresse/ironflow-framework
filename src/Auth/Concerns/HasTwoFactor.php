@@ -26,7 +26,7 @@ trait HasTwoFactor
     /**
      * Enable 2FA for this user.
      * Returns the plaintext base32 secret to display / encode as QR URI.
-     * The secret is stored encrypted (XOR + base64).
+     * The secret is stored encrypted (AES-256-GCM, see encryptSecret()).
      */
     public function enableTwoFactor(): string
     {
@@ -190,30 +190,22 @@ trait HasTwoFactor
         return $output;
     }
 
-    // ── Secret encryption (lightweight XOR, not a replacement for proper encryption) ──
+    // ── Secret encryption (AES-256-GCM, authenticated) ────────────────
 
+    /**
+     * Delegates to Ironflow\Support\Crypto (shared AES-256-GCM helper, also
+     * used by Model's `encrypted` cast). A random IV per call plus the GCM
+     * auth tag are stored alongside the ciphertext, so tampering is
+     * detected on decrypt (decryptSecret() returns '' rather than garbage
+     * plaintext).
+     */
     private function encryptSecret(string $secret): string
     {
-        $key = $this->deriveTwoFactorKey();
-        return base64_encode($secret ^ str_repeat($key, (int) ceil(strlen($secret) / strlen($key))));
+        return \Ironflow\Support\Crypto::encrypt($secret);
     }
 
     private function decryptSecret(string $encrypted): string
     {
-        if ($encrypted === '') {
-            return '';
-        }
-        $decoded = (string) base64_decode($encrypted, true);
-        if ($decoded === false || $decoded === '') {
-            return '';
-        }
-        $key = $this->deriveTwoFactorKey();
-        return $decoded ^ str_repeat($key, (int) ceil(strlen($decoded) / strlen($key)));
-    }
-
-    private function deriveTwoFactorKey(): string
-    {
-        $appKey = $_ENV['APP_KEY'] ?? 'ironflow-totp-key';
-        return substr(hash('sha256', $appKey, true), 0, 16);
+        return \Ironflow\Support\Crypto::decrypt($encrypted);
     }
 }

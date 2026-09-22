@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Ironflow\Middleware;
 
-use Ironflow\Application;
 use Ironflow\Exceptions\HttpException;
 use Ironflow\Http\Request;
 use Ironflow\RateLimiting\RateLimiter;
@@ -24,9 +23,13 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ThrottleRequests
 {
+    public function __construct(private readonly RateLimiter $limiter)
+    {
+    }
+
     public function handle(Request $request, callable $next, int $maxAttempts = 60, int $decayMinutes = 1): Response
     {
-        $limiter = Application::getInstance()->getContainer()->make(RateLimiter::class);
+        $limiter = $this->limiter;
 
         $key = $this->resolveKey($request);
         $decaySeconds = $decayMinutes * 60;

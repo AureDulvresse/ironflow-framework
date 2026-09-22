@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Clears the compiled Twig template cache and the application cache store.
+ */
 class CacheClearCommand extends Command
 {
     protected string $signature = 'cache:clear';

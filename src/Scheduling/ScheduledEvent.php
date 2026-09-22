@@ -18,15 +18,76 @@ class ScheduledEvent
 
     private ?string $description = null;
 
+    private bool $withoutOverlapping = false;
+
+    /** @var resource|null */
+    private $lockHandle = null;
+
     public function __construct(
         private readonly \Closure $callback,
         private readonly string $defaultDescription
     ) {
     }
 
-    public function run(): void
+    /**
+     * Skip this run if a previous run of the same event is still in progress,
+     * instead of starting a second one alongside it (e.g. a task that can take
+     * longer than the interval it's scheduled on). Backed by an OS-level file
+     * lock (flock) scoped to this event's description, so a crashed or killed
+     * process releases it automatically — no manual staleness/expiry needed.
+     */
+    public function withoutOverlapping(): self
     {
-        ($this->callback)();
+        $this->withoutOverlapping = true;
+        return $this;
+    }
+
+    /** @return bool True if the event actually ran; false if skipped (overlapping run in progress). */
+    public function run(): bool
+    {
+        if (!$this->withoutOverlapping) {
+            ($this->callback)();
+            return true;
+        }
+
+        if (!$this->acquireLock()) {
+            return false;
+        }
+
+        try {
+            ($this->callback)();
+            return true;
+        } finally {
+            $this->releaseLock();
+        }
+    }
+
+    private function acquireLock(): bool
+    {
+        $handle = fopen($this->lockPath(), 'c');
+        if ($handle === false) {
+            return false;
+        }
+        if (!flock($handle, LOCK_EX | LOCK_NB)) {
+            fclose($handle);
+            return false;
+        }
+        $this->lockHandle = $handle;
+        return true;
+    }
+
+    private function releaseLock(): void
+    {
+        if ($this->lockHandle !== null) {
+            flock($this->lockHandle, LOCK_UN);
+            fclose($this->lockHandle);
+            $this->lockHandle = null;
+        }
+    }
+
+    private function lockPath(): string
+    {
+        return sys_get_temp_dir() . '/ironflow-schedule-' . sha1($this->defaultDescription) . '.lock';
     }
 
     // ── Frequency helpers ────────────────────────────────────────────
@@ -97,7 +158,7 @@ class ScheduledEvent
         return $this;
     }
 
-    public function description(string $text = null): string
+    public function description(?string $text = null): string
     {
         if ($text !== null) {
             $this->description = $text;

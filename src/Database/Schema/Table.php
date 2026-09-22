@@ -4,19 +4,21 @@ declare(strict_types=1);
 
 namespace Ironflow\Database\Schema;
 
-use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\Types;
 
 /**
- * Fluent table column/index builder. Translates Laravel-like calls into
- * Doctrine DBAL Table definitions.
+ * Fluent table column/index builder — passed to the callback given to
+ * Schema::create()/Schema::table().
  */
-class Blueprint
+class Table
 {
     private array $columns = [];
     private array $indices = [];
     private array $foreigns = [];
     private array $drops = [];
+
+    /** @var ForeignIdDefinition[] Awaiting finalizeForeignIds() before getForeigns() is read. */
+    private array $pendingForeignIds = [];
 
     public function __construct(private readonly string $tableName)
     {
@@ -137,7 +139,22 @@ class Blueprint
     {
         $col = $this->unsignedBigInteger($name);
         $def = new ForeignIdDefinition($this, $name, $col);
+        $this->pendingForeignIds[] = $def;
         return $def;
+    }
+
+    /**
+     * Finalizes any foreignId()->constrained() calls made on this table —
+     * called by Schema before reading getForeigns(). Needed because
+     * ForeignIdDefinition::registerForeign() only adds the FK to $foreigns
+     * once called; foreignId() alone doesn't know yet whether constrained()
+     * will follow.
+     */
+    public function finalizeForeignIds(): void
+    {
+        foreach ($this->pendingForeignIds as $def) {
+            $def->registerForeign();
+        }
     }
 
     public function enum(string $name, array $values): ColumnDefinition
@@ -163,13 +180,13 @@ class Blueprint
         return $this;
     }
 
-    public function index(string|array $columns, string $name = null): static
+    public function index(string|array $columns, ?string $name = null): static
     {
         $this->indices[] = ['type' => 'index', 'columns' => (array) $columns, 'name' => $name];
         return $this;
     }
 
-    public function unique(string|array $columns, string $name = null): static
+    public function unique(string|array $columns, ?string $name = null): static
     {
         $this->indices[] = ['type' => 'unique', 'columns' => (array) $columns, 'name' => $name];
         return $this;

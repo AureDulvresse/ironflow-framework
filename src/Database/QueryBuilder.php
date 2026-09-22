@@ -270,12 +270,24 @@ class QueryBuilder
 
     public function min(string $column): mixed
     {
-        return $this->aggregate("MIN({$column})");
+        return $this->castNumericAggregate($this->aggregate("MIN({$column})"));
     }
 
     public function max(string $column): mixed
     {
-        return $this->aggregate("MAX({$column})");
+        return $this->castNumericAggregate($this->aggregate("MAX({$column})"));
+    }
+
+    /**
+     * sum()/avg() are always numeric by definition and cast unconditionally.
+     * min()/max() are meaningful on any orderable column (numbers, dates,
+     * strings), so casting unconditionally to float would silently corrupt a
+     * non-numeric result (e.g. MIN(created_at) becoming 0.0) — only cast when
+     * the raw PDO value actually looks numeric.
+     */
+    private function castNumericAggregate(mixed $value): mixed
+    {
+        return is_numeric($value) ? (float) $value : $value;
     }
 
     public function pluck(string $column): array

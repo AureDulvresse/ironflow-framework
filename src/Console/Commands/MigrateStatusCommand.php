@@ -21,8 +21,7 @@ class MigrateStatusCommand extends Command
     protected function handle(): int
     {
         $migrator = new Migrator($this->db);
-        $path     = base_path('modules');
-        $paths    = glob($path . '/*/Database/Migrations') ?: [$path];
+        $paths    = Migrator::discoverPaths(base_path());
 
         $all = [];
         foreach ($paths as $p) {

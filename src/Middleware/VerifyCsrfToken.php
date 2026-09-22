@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 namespace Ironflow\Middleware;
 
-use Ironflow\Config\Repository as Config;
 use Ironflow\Exceptions\HttpException;
 use Ironflow\Http\Request;
+use Ironflow\Http\Shield\ShieldConfig;
 use Ironflow\Session\SessionManager;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Verifies the CSRF token on state-changing requests.
+ * Verifies the CSRF token on state-changing requests — part of IronFlow's
+ * Shield bundle (see ShieldConfig), inspired by AdonisJS Shield.
  *
  * Exempt URIs can be declared in two ways:
  *   1. Override the $except property in a subclass.
- *   2. Add patterns to config/middleware.php → 'csrf_except' array.
+ *   2. Add patterns to config/shield.php → 'csrf_except' array.
  *
  * Patterns support fnmatch wildcards: 'api/*', 'webhooks/stripe'.
  */
@@ -26,7 +27,7 @@ class VerifyCsrfToken
 
     public function __construct(
         private readonly SessionManager $session,
-        private readonly Config $config
+        private readonly ShieldConfig $shield
     ) {
     }
 
@@ -46,8 +47,7 @@ class VerifyCsrfToken
 
     private function inExceptArray(Request $request): bool
     {
-        $configExcept = (array) ($this->config->get('middleware.csrf_except', []));
-        $except       = array_merge($this->except, $configExcept);
+        $except = array_merge($this->except, $this->shield->csrfExcept);
 
         foreach ($except as $pattern) {
             if (fnmatch($pattern, $request->getPathInfo())) {

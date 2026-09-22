@@ -6,6 +6,10 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new HMVC module: its directory structure, a module
+ * definition class, and a starter controller.
+ */
 class MakeModuleCommand extends Command
 {
     protected string $signature = 'make:module {name?}';
@@ -13,7 +17,7 @@ class MakeModuleCommand extends Command
 
     protected function handle(): int
     {
-        $name = ucfirst($this->argumentOrAsk('name', 'Module name (PascalCase, e.g. Blog):'));
+        $name = ucfirst($this->validClassName($this->argumentOrAsk('name', 'Module name (PascalCase, e.g. Blog):')));
         $base = base_path("modules/{$name}");
 
         if (is_dir($base)) {

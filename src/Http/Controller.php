@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Ironflow\Http;
 
-use Ironflow\Application;
 use Ironflow\Auth\Gate;
 use Ironflow\Auth\PolicyGate;
 use Ironflow\Exceptions\HttpException;
+use Ironflow\Routing\Router;
+use Ironflow\Template\Engine as TemplateEngine;
 
 /**
  * Base controller for web (and any) controllers.
@@ -27,6 +28,11 @@ use Ironflow\Exceptions\HttpException;
  * Controllers are plain classes — extending this is optional but removes
  * boilerplate. For JSON-first APIs, extend {@see ApiController} instead, which
  * builds on this base.
+ *
+ * TemplateEngine, Router, Gate and the current Request are constructor-injected
+ * (the Router resolves controllers through the Container, so this needs no
+ * extra wiring). A subclass adding its own dependencies must forward these
+ * four via `parent::__construct(...)`.
  */
 abstract class Controller
 {
@@ -40,6 +46,14 @@ abstract class Controller
      */
     protected array $middleware = [];
 
+    public function __construct(
+        protected readonly TemplateEngine $templateEngine,
+        protected readonly Router $router,
+        protected readonly Gate $gate,
+        protected readonly Request $request,
+    ) {
+    }
+
     /** @return array<string> */
     public function getMiddleware(): array
     {
@@ -51,7 +65,8 @@ abstract class Controller
     /** Render a Twig view to an HTML response. */
     protected function view(string $template, array $data = []): Response
     {
-        return Response::view($template, $data);
+        $html = $this->templateEngine->render($template, $data);
+        return new Response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
     }
 
     /** Build a JSON response. */
@@ -69,18 +84,13 @@ abstract class Controller
     /** Redirect to a named route. */
     protected function redirectToRoute(string $name, array $params = [], int $status = 302): RedirectResponse
     {
-        return (new RedirectResponse('', $status))->route($name, $params);
+        return new RedirectResponse($this->router->route($name, $params), $status);
     }
 
     /** Redirect back to the previous page (Referer), falling back to '/'. */
     protected function back(int $status = 302): RedirectResponse
     {
-        $referer = '/';
-        try {
-            $request = Application::getInstance()->getContainer()->make(Request::class);
-            $referer = $request->headers->get('referer') ?: '/';
-        } catch (\Throwable) {
-        }
+        $referer = $this->request->headers->get('referer') ?: '/';
         return new RedirectResponse($referer, $status);
     }
 
@@ -103,7 +113,7 @@ abstract class Controller
     protected function authorize(string $ability, mixed $arguments = []): void
     {
         try {
-            $this->gate()->authorize($ability, $arguments);
+            $this->gate->authorize($ability, $arguments);
         } catch (HttpException $e) {
             throw $e;
         } catch (\Throwable) {
@@ -114,7 +124,7 @@ abstract class Controller
     protected function can(string $ability, mixed $arguments = []): bool
     {
         try {
-            return $this->gate()->allows($ability, $arguments);
+            return $this->gate->allows($ability, $arguments);
         } catch (\Throwable) {
             return false;
         }
@@ -139,7 +149,7 @@ abstract class Controller
      */
     protected function bouncer(string $policyClass): PolicyGate
     {
-        return $this->gate()->with($policyClass);
+        return $this->gate->with($policyClass);
     }
 
     /**
@@ -151,10 +161,5 @@ abstract class Controller
     protected function authorizePolicy(string $policyClass, string $ability, mixed ...$arguments): void
     {
         $this->bouncer($policyClass)->authorize($ability, ...$arguments);
-    }
-
-    private function gate(): Gate
-    {
-        return Application::getInstance()->getContainer()->make(Gate::class);
     }
 }

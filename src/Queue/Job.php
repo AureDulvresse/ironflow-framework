@@ -14,13 +14,16 @@ namespace Ironflow\Queue;
  *       public function handle(): void
  *       {
  *           $user = User::find($this->userId);
- *           Mail::send(new WelcomeMail($user));
+ *           // Jobs are unserialized from the queue, not container-resolved,
+ *           // so constructor injection isn't available here — resolve
+ *           // services explicitly instead:
+ *           app(Mailer::class)->send(new WelcomeMail($user));
  *       }
  *   }
  *
- *   // Dispatch:
- *   Queue::push(new SendWelcomeEmail($user->id));
- *   Queue::later(60, new SendWelcomeEmail($user->id));  // 60s delay
+ *   // Dispatch (from a controller/service, via injected QueueManager):
+ *   $queue->push(new SendWelcomeEmail($user->id));
+ *   $queue->later(60, new SendWelcomeEmail($user->id));  // 60s delay
  *
  * Jobs are serialized with PHP's serialize(); keep constructor args to scalars
  * or ids rather than full models so the payload stays small and stable.

@@ -47,7 +47,13 @@ abstract class Command extends SymfonyCommand
         $this->input  = $input;
         $this->output = $output;
         $this->io     = new SymfonyStyle($input, $output);
-        return $this->handle() ?? self::SUCCESS;
+
+        try {
+            return $this->handle() ?? self::SUCCESS;
+        } catch (\InvalidArgumentException $e) {
+            $this->error($e->getMessage());
+            return self::FAILURE;
+        }
     }
 
     abstract protected function handle(): int|null;
@@ -179,6 +185,108 @@ abstract class Command extends SymfonyCommand
             return $value;
         }
         return $this->ask($question, $default);
+    }
+
+    /**
+     * Validates a class name before it's ever interpolated into a file path
+     * or generated PHP source — rejects anything that isn't a plain PHP
+     * identifier, optionally with `/`- or `\`-separated sub-namespace
+     * segments (e.g. "PostController" or "Admin/PostController"). Throwing
+     * here (caught centrally in execute()) means a stray `../` or a
+     * syntax-breaking character fails the command instead of silently
+     * writing wherever the input points or generating invalid PHP.
+     */
+    protected function validClassName(string $name): string
+    {
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*([\/\\\\][A-Za-z_][A-Za-z0-9_]*)*$/', $name)) {
+            throw new \InvalidArgumentException(
+                "Invalid class name [{$name}] — expected a PHP identifier, optionally with / or \\ sub-namespace segments."
+            );
+        }
+        return $name;
+    }
+
+    /** Normalizes a --module option the same way make:module names module directories (PascalCase). */
+    protected function moduleOption(): ?string
+    {
+        $raw = $this->option('module');
+        return is_string($raw) && $raw !== '' ? ucfirst($raw) : null;
+    }
+
+    /**
+     * A generated class is only protected by module isolation once it's
+     * declared in its module's `providers: [...]` — this is opt-in by
+     * design, not auto-discovered by namespace convention (see
+     * Container::validateModuleAccess()). Inserts it there automatically so
+     * a freshly generated class is protected without a manual step.
+     */
+    protected function registerAsProvider(string $module, string $fqcn): void
+    {
+        $modulePath = base_path("modules/{$module}/{$module}Module.php");
+
+        if (!is_file($modulePath)) {
+            $this->line("Note: could not find {$modulePath} — add \\{$fqcn}::class to its providers: manually.");
+            return;
+        }
+
+        $source = file_get_contents($modulePath);
+        $updated = $this->insertIntoProviders($source, $fqcn);
+
+        if ($updated === null) {
+            $this->line("Note: could not locate providers: in {$module}Module.php — add \\{$fqcn}::class manually.");
+            return;
+        }
+
+        if ($updated !== $source) {
+            file_put_contents($modulePath, $updated);
+        }
+    }
+
+    /**
+     * Inserts "\Fqcn::class" into the providers: [...] array of a #[Module(...)]
+     * attribute. Returns null if no providers: array could be found (caller
+     * falls back to a manual instruction rather than risk corrupting the
+     * file). Idempotent — does nothing if the FQCN is already listed.
+     */
+    private function insertIntoProviders(string $source, string $fqcn): ?string
+    {
+        if (!preg_match('/providers\s*:\s*\[/', $source, $match, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+
+        $openBracket = $match[0][1] + strlen($match[0][0]) - 1;
+        $depth = 0;
+        $closeBracket = null;
+
+        for ($i = $openBracket; $i < strlen($source); $i++) {
+            if ($source[$i] === '[') {
+                $depth++;
+            } elseif ($source[$i] === ']') {
+                $depth--;
+                if ($depth === 0) {
+                    $closeBracket = $i;
+                    break;
+                }
+            }
+        }
+
+        if ($closeBracket === null) {
+            return null;
+        }
+
+        $inner = substr($source, $openBracket + 1, $closeBracket - $openBracket - 1);
+        $entry = "\\{$fqcn}::class";
+
+        if (str_contains($inner, $entry)) {
+            return $source;
+        }
+
+        $trimmedInner = trim($inner);
+        $newInner = $trimmedInner === ''
+            ? "\n        {$entry},\n    "
+            : rtrim($inner) . (str_ends_with(rtrim($inner), ',') ? '' : ',') . "\n        {$entry},\n    ";
+
+        return substr($source, 0, $openBracket + 1) . $newInner . substr($source, $closeBracket);
     }
 
     protected function ask(string $question, ?string $default = null): string

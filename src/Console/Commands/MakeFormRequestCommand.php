@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new FormRequest class for validated controller input.
+ */
 class MakeFormRequestCommand extends Command
 {
     protected string $signature = 'make:form-request {name? : Class name (e.g. StorePostRequest)} {--module= : Target module}';
@@ -13,8 +16,8 @@ class MakeFormRequestCommand extends Command
 
     public function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'FormRequest name (e.g. StorePostRequest):');
-        $module = $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'FormRequest name (e.g. StorePostRequest):'));
+        $module = $this->moduleOption();
 
         [$namespace, $dir] = $this->resolveTarget($name, (string) $module);
         $class = class_basename($name);
