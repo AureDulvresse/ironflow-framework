@@ -10,11 +10,13 @@ Les versions `0.1.x`/`0.2.0` (juin 2026) correspondent à la phase de prototypag
 
 ## [Unreleased]
 
-### Added
+## [2.1.1] - 2026-09-22
+
+### Added (2.1.1)
 
 - **CI GitHub Actions** (`.github/workflows/ci.yml`) — exécute `composer test` (Pest) sur PHP 8.2/8.3/8.4 en matrice et `composer analyse` (PHPStan niveau 6, annotations inline sur les PR) à chaque push sur `main`/`develop` et sur chaque pull request. Jusqu'ici la suite de tests et l'analyse statique ne tournaient que si quelqu'un pensait à les lancer manuellement. Badge de statut ajouté au README.
 
-### Fixed
+### Fixed (2.1.1)
 
 - **`composer.lock` verrouillait des paquets Symfony `^8.1` qui exigent en réalité PHP ≥8.4.1, alors que `composer.json` annonce `"php": ">=8.2"`.** Invisible en local (poste de dev en PHP 8.5), révélé immédiatement par la CI qui vient d'être ajoutée : `composer install` échouait sur les jobs PHP 8.2/8.3. Les 8 paquets `symfony/*` sont rétrogradés vers `^7.0` (résolu en 7.4.x, compatible PHP 8.2+) ; `config.platform.php` fixé à `8.2.0` dans `composer.json` pour que toute résolution future de `composer.lock` respecte la borne basse annoncée, même sur un poste avec un PHP plus récent — c'est exactement ce qui a permis à cette incohérence de passer inaperçue jusqu'ici.
 - **PHPStan niveau 6 est désormais entièrement propre (0 erreur)** — la CI faisait échouer `composer analyse` sur 5 erreurs jusque-là considérées "pré-existantes et sans rapport" en local, jamais réellement corrigées faute d'y être forcé. `Storage` gagne un accesseur `name()` pour son disque (au lieu d'une propriété jamais lue) et des annotations `@param`/`@return resource` sur `writeStream()`/`readStream()` (PHP n'a pas de type natif `resource`). `HttpClient::pool()` avait un vrai bug latent au passage : la déstructuration `[$method, $url, $opts]` sur un tuple à 2 éléments levait un warning PHP "Undefined array key 2" à chaque requête sans options — remplacée par un accès `$tuple[2] ?? []` qui évite le warning et satisfait correctement le type optionnel. `PendingMail` perd son paramètre `$config`, jamais lu : le `from` par défaut est déjà appliqué par `Mailer::send()` lui-même, qui a sa propre copie de la config.
@@ -23,11 +25,11 @@ Les versions `0.1.x`/`0.2.0` (juin 2026) correspondent à la phase de prototypag
 
 ## [2.1.0] - 2026-09-22
 
-### Added
+### Added (2.1.0)
 
 - **Passe de documentation PHPDoc.** Ajout des docblocks de classe manquants sur les 30 commandes `make:*`/`migrate*` (Console/Commands) et les 6 middlewares qui n'en avaient aucun (`Authenticate`, `MaintenanceMode`, `RedirectIfAuthenticated`, `ShareErrorsFromSession`, `StartSession`, `TrimStrings`). Ajout de `@throws` sur ~25 fichiers où une méthode publique pouvait lever une exception sans que ce soit documenté (`Container::make()`, `AuthManager`, `Router`, `RouteCollection`, `Pipeline`, `Migrator`, `ModuleManager`, `Storage::disk()`, etc.). Ajout de formes de tableaux (`array<string, mixed>`, etc.) sur `Model::toArray()` et plusieurs méthodes de `Collection`. Corrections mineures au passage : alignement `@param` non standard dans `ApiController::paginate()`, commentaires `//` en paramètre de constructeur remplacés par un docblock dans `BelongsTo`, et une incohérence trouvée en chemin — `HttpResponse::throw()` documentait `HttpException` alors qu'il lève en réalité `\RuntimeException`.
 
-### Changed
+### Changed (2.1.0)
 
 - **README entièrement réécrit** pour présenter IronFlow comme le cœur d'un framework (et non une application prête à l'emploi) : installation clarifiée, vue d'ensemble de l'architecture restructurée, documentation mise à jour pour les modules, l'injection par conteneur, le routage, l'ORM, la sécurité, le CLI, les tests et le flux de contribution — aligné sur l'usage recommandé via le dépôt "skeleton" associé.
 
@@ -37,7 +39,7 @@ Les versions `0.1.x`/`0.2.0` (juin 2026) correspondent à la phase de prototypag
 
 Chantier de durcissement sécurité et de correction de bugs de fond sur la couche données, doublé d'une suppression du pattern Facade au profit de l'injection de dépendances partout.
 
-### Security
+### Security (2.0.0)
 
 - **`JWT_SECRET` vide ou trop court est désormais rejeté explicitement.** `JwtGuard` levait silencieusement une clé HMAC vide (`?? ''`) si `JWT_SECRET` n'était jamais configuré — n'importe qui pouvait forger des tokens valides. Vérifié maintenant en un seul point (`secret()`), avant le bloc `try/catch` de décodage pour que l'erreur de configuration ne soit jamais confondue avec un échec normal de token — et étendu à la longueur minimale (32 octets, requise par HS256), qu'une `DomainException` de `firebase/php-jwt` aurait sinon fait échouer silencieusement en "non authentifié".
 - **`JwtGuard::createToken()` ne permet plus à `$claims` d'écraser les claims réservés** (`sub`, `iat`, `exp`, `iss`) — l'ordre de `array_merge()` était inversé.
@@ -51,7 +53,7 @@ Chantier de durcissement sécurité et de correction de bugs de fond sur la couc
 - **`QueueManager::pop()` restreint `unserialize()` aux seules sous-classes de `Job`** (`allowed_classes` calculé dynamiquement via `get_declared_classes()`, après autoload forcé de la classe nommée dans le payload) — élimine un vecteur d'injection d'objet PHP si la table `jobs` était un jour atteignable par autre chose que `push()`/`later()`.
 - **Le cast `encrypted` de `Model` retombait silencieusement en clair si `APP_KEY` était absent, et chiffrait avec AES-256-CBC non authentifié.** Même classe de faille que l'ancien schéma 2FA (ci-dessus) : `decryptCast()`/`encryptCast()` retournaient/stockaient la valeur brute sans la moindre erreur si `APP_KEY` n'était pas configuré — un modèle déclarant `$casts = ['ssn' => 'encrypted']` pouvait persister des données sensibles en clair pendant des mois sans que rien ne le signale. Les deux méthodes délèguent désormais à un nouveau helper partagé `Ironflow\Support\Crypto` (AES-256-GCM authentifié — même schéma que 2FA, dont la logique de chiffrement est extraite dans ce helper pour ne plus être dupliquée), qui échoue explicitement si `APP_KEY` est absent.
 
-### Fixed
+### Fixed (2.0.0)
 
 - **Le scope global de `SoftDeletes` n'était jamais activé.** `bootSoftDeletes()` n'était appelée par personne — `Model::boot()` était un stub jamais invoqué, sans mécanisme générique de boot des traits. Conséquence concrète : **les lignes soft-deleted restaient visibles dans toutes les requêtes** (`all()`, `find()`, relations...). `Model` gagne un vrai cycle de boot par classe (`bootIfNotBooted()`, appelé depuis `__construct()` et `query()`) qui invoque `boot()` puis tout `boot{NomDuTrait}()` détecté via une résolution récursive des traits utilisés (pattern Laravel `classUsesRecursive`/`traitUsesRecursive`). `SoftDeletes::withTrashed()` était en plus un no-op déguisé ("simplified" en commentaire) et `onlyTrashed()` entrait en conflit direct avec le scope une fois celui-ci actif (`deleted_at IS NULL AND deleted_at IS NOT NULL` — toujours zéro résultat) ; `ModelQueryBuilder`/`Model::query()` acceptent maintenant une liste de scopes globaux à exclure, ce qui corrige les deux.
 - **Les contraintes de clé étrangère déclarées via `foreignId()->constrained()` n'étaient jamais créées.** `ForeignIdDefinition::registerForeign()` n'était appelée par personne — les tables se créaient sans intégrité référentielle, sans erreur. `Table::foreignId()` (ex-`Blueprint::foreignId()`) mémorise désormais chaque définition en attente ; `Schema::buildTable()` les finalise avant de lire les FK à générer.
@@ -67,13 +69,13 @@ Chantier de durcissement sécurité et de correction de bugs de fond sur la couc
 - `BelongsToMany::detach(int|array $ids = null)` — dépréciation PHP 8.4 (paramètre implicitement nullable) corrigée en `int|array|null`.
 - **`firstOrCreate()`/`updateOrCreate()` : la fenêtre de course entre le SELECT et l'INSERT ne fait plus planter la requête.** Ces méthodes restent un SELECT puis un INSERT — ça ne peut être rendu réellement atomique que par une contrainte unique en base (aucun code applicatif seul ne peut le garantir) — mais si deux appels concurrents trouvent tous les deux "rien" et tentent tous les deux de créer la ligne, le perdant lève désormais une exception de conflit qui est interceptée pour relire la ligne que le gagnant vient de créer, au lieu de laisser planter tel quel une `UniqueConstraintViolationException` de Doctrine DBAL non gérée. Une vraie violation d'intégrité sans rapport avec une course (aucune ligne ne correspond aux critères de recherche même après la relecture) continue à se propager normalement.
 
-### Removed
+### Removed (2.0.0)
 
 - Suppression complète du pattern Facade (`Ironflow\Support\Facade` et les 15 façades statiques concrètes : `Auth`, `Cache`, `Config`, `DB`, `Event`, `Gate`, `Http`, `Log`, `Mail`, `Notification`, `Queue`, `Router`, `Session`, `Validator`, `View`). Aucune n'était appelée depuis du code réel du framework — uniquement des exemples de documentation. Toute dépendance de service doit désormais passer par injection de constructeur.
 - `Container::makeInternal()` — jamais utilisée, et son intention documentée ("résoudre sans vérification de module") devenait incompatible avec le nouveau mécanisme d'héritage de contexte.
 - `JwtGuard::setRequest()` — aucun appelant nulle part dans le framework.
 
-### Changed
+### Changed (2.0.0)
 
 - **L'isolation de modules est maintenant appliquée à l'exécution, pas seulement déclarée.** `Container::make()` propage désormais un contexte de module ambiant à travers toute chaîne de résolution transitive (dépendances de constructeur), y compris pour les singletons déjà mis en cache, et gagne `resetModuleContext()` pour les process long-running. Auparavant, `$callerModule` n'était jamais passé nulle part dans le framework — le contrôle d'accès cross-module documenté dans le README n'avait donc jamais d'effet réel.
 - `php forge make:controller --module=X` ajoute désormais automatiquement le contrôleur généré aux `providers:` de son module (isolation opt-in par déclaration) et corrige un bug de casse sur `--module` (`blog` → `Blog`).
@@ -89,7 +91,7 @@ Chantier de durcissement sécurité et de correction de bugs de fond sur la couc
 - `Filesystem\Storage` ne retombe plus silencieusement sur le disque `local`/le dossier temp système en cas d'échec de résolution du conteneur (3 `catch (\Throwable) {}` retirés).
 - `AboutCommand`/`TinkerCommand` reçoivent `Container`/`Application` par constructeur au lieu d'`Application::getInstance()` ; `MakePolicyCommand` utilise le helper global `base_path()` au lieu d'une méthode privée dupliquée.
 
-### Added
+### Added (2.0.0)
 
 - `Command::validClassName()`, `Command::moduleOption()` et `Command::registerAsProvider()` — helpers partagés par toutes les commandes `make:*` (le dernier extrait de `MakeControllerCommand`).
 - `Model::setDispatcher()` — override de test pour `Dispatcher`, symétrique à `setConnection()`.
@@ -107,7 +109,7 @@ Chantier de durcissement sécurité et de correction de bugs de fond sur la couc
 
 Nouveaux composants applicatifs (queue, scheduler, notifications, mail, HTTP client, health checks), remplacement des implémentations maison par des bibliothèques matures, et large campagne de stabilisation (revue adversariale + conformité PHP 8.4).
 
-### Added
+### Added (1.2.0)
 
 - **Queue** — jobs persistés en base, `Worker`, commande `queue:work`.
 - **Scheduler** — tâches planifiées façon cron, commande `schedule:run`.
@@ -123,7 +125,7 @@ Nouveaux composants applicatifs (queue, scheduler, notifications, mail, HTTP cli
 - Documentation : `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`.
 - Logo et identité visuelle du projet (`.github/assets/`).
 
-### Changed
+### Changed (1.2.0)
 
 - **Middlewares consolidés** sous le namespace `Ironflow\Middleware` (auparavant dispersés dans `Http\Middleware`), avec un `MiddlewareResolver` unifié partagé par `Kernel` et `Router` (groupes, alias, paramètres `:params`, résolution récursive avec garde anti-cycle) — corrige au passage les groupes de middlewares déclarés au niveau route qui n'étaient jamais réellement développés.
 - `Pipeline` transmet désormais les `:params` aux middlewares "hook-style", avec des messages d'erreur plus clairs.
@@ -131,7 +133,7 @@ Nouveaux composants applicatifs (queue, scheduler, notifications, mail, HTTP cli
 - **`FakeGenerator` réécrit en wrapper `fakerphp/faker`** (remplace l'implémentation maison) ; `words()`/`dateTimeBetween()` gardent leur signature d'origine, `password()` reste un helper spécifique IronFlow (bcrypt). `Factory::fake()` gagne un paramètre `locale`.
 - **`Cache` migre vers `symfony/cache`** (PSR-6 : drivers file/apcu/redis/array) et **`Storage` vers `league/flysystem`** (local/public/s3) — remplacent les implémentations internes.
 
-### Fixed
+### Fixed (1.2.0)
 
 Campagne de correction issue d'une revue adversariale du code existant :
 
@@ -157,7 +159,7 @@ Campagne de correction issue d'une revue adversariale du code existant :
 
 Système RBAC/permissions, contrôleur API dédié, et durcissement de la couche HTTP (upload, CSRF, en-têtes de sécurité).
 
-### Added
+### Added (1.1.0)
 
 - **RBAC & autorisation** : `Gate` (capacités globales via `define()`/`allows()`/`denies()`), `Policy` (classes de politique auto-découvertes par convention), traits `HasRole`, `HasPermission`, `HasTwoFactor`, `Auditable`, modèles `Auth\RBAC\Role`/`Permission`, module d'audit pour la traçabilité des actions sensibles.
 - `Http\ApiController` — contrôleur dédié aux réponses JSON/API.
@@ -166,7 +168,7 @@ Système RBAC/permissions, contrôleur API dédié, et durcissement de la couche
 - `Http\UploadedFile` et validation de fichiers uploadés.
 - `make:policy` — scaffolding CLI pour les classes `Policy`.
 
-### Changed
+### Changed (1.1.0)
 
 - **`Exceptions\Handler` réécrit** : page de debug interactive en développement (CSS inline, sans CDN), templates d'erreur Twig stylés en production, enveloppe JSON pour les requêtes API, `ValidationException` → 422 JSON ou redirection avec erreurs flashées.
 - `Schema` étendu de façon significative (types de colonnes, modificateurs, génération SQL par dialecte).
@@ -179,7 +181,7 @@ Système RBAC/permissions, contrôleur API dédié, et durcissement de la couche
 
 Première version publique d'IronFlow. Le noyau est complet et testé (91 assertions, 0 échec).
 
-### Added
+### Added (1.0.0)
 
 #### Conteneur DI
 
