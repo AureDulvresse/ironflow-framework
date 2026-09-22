@@ -12,6 +12,10 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 - **CI GitHub Actions** (`.github/workflows/ci.yml`) — exécute `composer test` (Pest) sur PHP 8.2/8.3/8.4 en matrice et `composer analyse` (PHPStan niveau 6, annotations inline sur les PR) à chaque push sur `main`/`develop` et sur chaque pull request. Jusqu'ici la suite de tests et l'analyse statique ne tournaient que si quelqu'un pensait à les lancer manuellement. Badge de statut ajouté au README.
 
+### Fixed
+
+- **`composer.lock` verrouillait des paquets Symfony `^8.1` qui exigent en réalité PHP ≥8.4.1, alors que `composer.json` annonce `"php": ">=8.2"`.** Invisible en local (poste de dev en PHP 8.5), révélé immédiatement par la CI qui vient d'être ajoutée : `composer install` échouait sur les jobs PHP 8.2/8.3. Les 8 paquets `symfony/*` sont rétrogradés vers `^7.0` (résolu en 7.4.x, compatible PHP 8.2+) ; `config.platform.php` fixé à `8.2.0` dans `composer.json` pour que toute résolution future de `composer.lock` respecte la borne basse annoncée, même sur un poste avec un PHP plus récent — c'est exactement ce qui a permis à cette incohérence de passer inaperçue jusqu'ici.
+
 ## [2.0.0] - 2026-09-22
 
 ### Security
