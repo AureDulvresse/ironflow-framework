@@ -4,6 +4,7 @@
 
 The technical core of IronFlow: dependency container, HMVC modules, HTTP routing, CLI, ORM, security, and application services.
 
+[![CI](https://img.shields.io/github/actions/workflow/status/ironflow-framework/framework/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/ironflow-framework/framework/actions/workflows/ci.yml)
 [![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
 [![License MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 [![Version](https://img.shields.io/badge/version-2.0.0-6366f1?style=flat-square)](https://github.com/ironflow-framework/framework/releases)

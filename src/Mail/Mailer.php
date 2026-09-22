@@ -41,7 +41,7 @@ class Mailer
     /** Begin composing a message addressed to one or more recipients. */
     public function to(string|array $recipients): PendingMail
     {
-        return (new PendingMail($this, $this->config))->to($recipients);
+        return (new PendingMail($this))->to($recipients);
     }
 
     /** Send a fully-built Mailable or raw Email. */

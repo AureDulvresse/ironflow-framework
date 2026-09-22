@@ -154,8 +154,9 @@ class HttpClient
     public function pool(array $requests): array
     {
         $responses = [];
-        foreach ($requests as $key => [$method, $url, $opts]) {
-            $merged = array_merge_recursive($this->options, $opts ?? []);
+        foreach ($requests as $key => $tuple) {
+            [$method, $url] = $tuple;
+            $merged = array_merge_recursive($this->options, $tuple[2] ?? []);
             $responses[$key] = $this->client->request($method, $url, $merged);
         }
 

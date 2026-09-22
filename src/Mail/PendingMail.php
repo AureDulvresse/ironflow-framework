@@ -16,6 +16,10 @@ use Symfony\Component\Mime\Email;
  * PendingMail is built by application code (`$mailer->to(...)->view(...)`),
  * not resolved through the Container, so there's no constructor to inject
  * into. Same accepted-escape-hatch category as Mailable::renderView().
+ *
+ * Config-driven defaults (e.g. the `from` address) are applied by
+ * Mailer::send() itself once this message reaches it — not here — so this
+ * class has no need for its own copy of that config.
  */
 class PendingMail
 {
@@ -29,8 +33,7 @@ class PendingMail
     private ?string $replyTo = null;
 
     public function __construct(
-        private readonly Mailer $mailer,
-        private readonly array $config = []
+        private readonly Mailer $mailer
     ) {
     }
 

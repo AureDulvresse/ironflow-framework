@@ -50,6 +50,12 @@ class Storage
         return new static($name, self::$disks[$name], self::diskConfigFor($name));
     }
 
+    /** The name of the disk this instance was resolved for. */
+    public function name(): string
+    {
+        return $this->diskName;
+    }
+
     // ── Static proxies (default disk) ────────────────────────────────
 
     public static function put(string $path, mixed $contents): bool
@@ -94,6 +100,7 @@ class Storage
         }
     }
 
+    /** @param resource $resource */
     public function writeStream(string $path, $resource): bool
     {
         try {
@@ -113,6 +120,7 @@ class Storage
         }
     }
 
+    /** @return resource|false */
     public function readStream(string $path)
     {
         try {
