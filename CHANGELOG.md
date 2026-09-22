@@ -10,6 +10,15 @@ Les versions `0.1.x`/`0.2.0` (juin 2026) correspondent à la phase de prototypag
 
 ## [Unreleased]
 
+### Added
+
+- **`composer audit` en CI** — nouveau job `security-audit` dans `.github/workflows/ci.yml`, qui vérifie `composer.lock` contre la base d'avisories de sécurité (FriendsOfPHP/security-advisories) à chaque push/PR.
+- **`.github/dependabot.yml`** — mises à jour automatiques hebdomadaires des dépendances `composer` (groupées pour `symfony/*`) et des actions GitHub, en PR vers `develop`.
+
+### Changed
+
+- **Les 3 GitHub Actions de `ci.yml` (`actions/checkout`, `actions/cache`, `shivammathur/setup-php`) sont désormais épinglées sur leur SHA de commit complet** plutôt que sur un tag mutable (`@v4`, `@v2`) — empêche qu'un tag soit réécrit côté fournisseur pour injecter du code dans le pipeline CI (attaque de chaîne d'approvisionnement classique sur les Actions), au prix d'une mise à jour manuelle (ou via Dependabot, ci-dessus) à chaque nouvelle version voulue.
+
 ## [2.1.1] - 2026-09-22
 
 ### Added (2.1.1)
