@@ -36,6 +36,16 @@ class Container
     private array $building = [];
 
     /**
+     * Stack of module FQCNs, innermost resolution last. Lets a caller-supplied
+     * or owner-derived module context survive nested/transitive make() calls
+     * (constructor injection) without every internal call site having to pass
+     * $callerModule explicitly. See make().
+     *
+     * @var string[]
+     */
+    private array $moduleContextStack = [];
+
+    /**
      * Cached constructor parameter lists, keyed by FQCN.
      * Instance-level (not static) so each Container instance in tests is isolated.
      *
@@ -87,39 +97,55 @@ class Container
      */
     public function make(string $abstract, array $overrides = [], ?string $callerModule = null): mixed
     {
-        $this->validateModuleAccess($abstract, $callerModule);
+        // No explicit caller given — inherit whichever module is currently
+        // being resolved (set below), so isolation survives nested/transitive
+        // constructor injection instead of being lost after the first level.
+        $effectiveCaller = $callerModule ?? ($this->moduleContextStack === [] ? null : end($this->moduleContextStack));
+
+        $this->validateModuleAccess($abstract, $effectiveCaller);
 
         // Already a shared instance
         if (isset($this->instances[$abstract])) {
             return $this->instances[$abstract]; // @phpstan-ignore-line
         }
 
-        // Explicit binding — skip if we're already inside this factory to break
-        // self-referential cycles (e.g. bind(X, X) creates fn($c) => $c->make(X))
-        if (isset($this->bindings[$abstract]) && !isset($this->building[$abstract])) {
-            $this->building[$abstract] = true;
-            try {
-                $binding = $this->bindings[$abstract];
-                $result  = ($binding['factory'])($this, $overrides);
-            } finally {
-                unset($this->building[$abstract]);
+        // Everything resolved while building $abstract (its own constructor
+        // dependencies, transitively) is attributed to $abstract's owning
+        // module, if it has one — otherwise it inherits the current caller.
+        $owner = $this->bindingOwners[$abstract] ?? $effectiveCaller;
+        $this->moduleContextStack[] = $owner;
+        try {
+            // Explicit binding — skip if we're already inside this factory to break
+            // self-referential cycles (e.g. bind(X, X) creates fn($c) => $c->make(X))
+            if (isset($this->bindings[$abstract]) && !isset($this->building[$abstract])) {
+                $this->building[$abstract] = true;
+                try {
+                    $binding = $this->bindings[$abstract];
+                    $result  = ($binding['factory'])($this, $overrides);
+                } finally {
+                    unset($this->building[$abstract]);
+                }
+
+                if ($binding['singleton']) {
+                    $this->instances[$abstract] = $result;
+                }
+
+                return $result; // @phpstan-ignore-line
             }
 
-            if ($binding['singleton']) {
-                $this->instances[$abstract] = $result;
-            }
-
-            return $result; // @phpstan-ignore-line
+            // Auto-resolve via reflection (also serves as fallback when $building is set)
+            return $this->autoResolve($abstract, $overrides);
+        } finally {
+            array_pop($this->moduleContextStack);
         }
-
-        // Auto-resolve via reflection (also serves as fallback when $building is set)
-        return $this->autoResolve($abstract, $overrides);
     }
 
-    /** Resolve without module-access checking (used internally). */
-    public function makeInternal(string $abstract, array $overrides = []): mixed
+    /** Clears the module-resolution context. Call between independent units of
+     *  work in a long-running process (e.g. a queue worker between jobs) so a
+     *  failure mid-resolution can never leak module context into the next one. */
+    public function resetModuleContext(): void
     {
-        return $this->make($abstract, $overrides, callerModule: null);
+        $this->moduleContextStack = [];
     }
 
     public function has(string $abstract): bool
@@ -211,7 +237,7 @@ class Container
 
     private function resolveInjectKey(string $key): mixed
     {
-        // config.app.name → Config facade
+        // config.app.name → Config\Repository::get('app.name')
         if (str_starts_with($key, 'config.')) {
             $configKey = substr($key, 7);
             /** @var Config\Repository $config */

@@ -13,7 +13,6 @@ use Ironflow\Console\Kernel as ConsoleKernel;
 use Ironflow\Container;
 use Ironflow\Events\Dispatcher;
 use Ironflow\Exceptions\Handler as ExceptionHandler;
-use Ironflow\Support\Facade;
 use Ironflow\Http\Kernel as HttpKernel;
 use Ironflow\Http\Request;
 use Ironflow\Logging\Logger;
@@ -61,7 +60,6 @@ class Application
 
         $this->loadEnvironment();
         $this->bindCoreServices();
-        Facade::setContainer($this->container);
     }
 
     public static function getInstance(): self
@@ -302,7 +300,8 @@ class Application
         $this->container->singleton(\Ironflow\Queue\Worker::class, fn() =>
             new \Ironflow\Queue\Worker(
                 $this->container->make(\Ironflow\Queue\QueueManager::class),
-                $this->container->make(Logger::class)
+                $this->container->make(Logger::class),
+                $this->container
             )
         );
 

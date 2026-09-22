@@ -8,12 +8,28 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Unreleased]
 
+### Removed
+
+- Suppression complète du pattern Facade (`Ironflow\Support\Facade` et les 15 façades statiques concrètes : `Auth`, `Cache`, `Config`, `DB`, `Event`, `Gate`, `Http`, `Log`, `Mail`, `Notification`, `Queue`, `Router`, `Session`, `Validator`, `View`). Aucune n'était appelée depuis du code réel du framework — uniquement des exemples de documentation. Toute dépendance de service doit désormais passer par injection de constructeur.
+- `Container::makeInternal()` — jamais utilisée, et son intention documentée ("résoudre sans vérification de module") devenait incompatible avec le nouveau mécanisme d'héritage de contexte.
+
+### Changed
+
+- **L'isolation de modules est maintenant appliquée à l'exécution, pas seulement déclarée.** `Container::make()` propage désormais un contexte de module ambiant à travers toute chaîne de résolution transitive (dépendances de constructeur), y compris pour les singletons déjà mis en cache. Auparavant, `$callerModule` n'était jamais passé nulle part dans le framework — le contrôle d'accès cross-module documenté dans le README n'avait donc jamais d'effet réel.
+- `php forge make:controller --module=X` ajoute désormais automatiquement le contrôleur généré aux `providers:` de son module (isolation opt-in par déclaration) et corrige un bug de casse sur `--module` (`blog` → `Blog`).
+- `NotificationManager::toMail()` passe désormais explicitement le `Mailer` injecté à la notification (`toMail(object $notifiable, Mailer $mailer)`), remplaçant l'accès via la façade `Mail` supprimée.
+
+### Added
+
+- `Container::resetModuleContext()` — filet de sécurité défensif pour les process long-running (ex. `Queue\Worker`), appelé entre deux jobs pour garantir qu'aucun contexte de module ne fuite d'une résolution avortée vers la suivante.
+
 ### À venir
 
-- Cache — façade unifiée, drivers file / Redis
+- Cache — interface unifiée, drivers file / Redis
 - File d'attente de jobs (queue workers)
 - WebSockets / diffusion temps réel
 - Documentation complète avec recettes
+- Lint statique (`module:lint`) pour détecter les violations de frontière de module au niveau du code source
 
 ---
 

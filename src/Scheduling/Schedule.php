@@ -15,7 +15,7 @@ use Ironflow\Queue\QueueManager;
  *
  * Define tasks in a module's boot() or a dedicated scheduler file:
  *
- *   $schedule->call(fn() => Cache::flush())->daily();
+ *   $schedule->call(fn() => $cache->flush())->daily();
  *   $schedule->command('db:backup')->dailyAt('02:00');
  *   $schedule->job(new PruneStaleSessions())->hourly();
  *   $schedule->call($fn)->everyMinutes(15)->weekdays();

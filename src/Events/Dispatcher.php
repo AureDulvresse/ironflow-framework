@@ -10,9 +10,9 @@ use Ironflow\Container;
  * Event Dispatcher — decoupled pub/sub between modules.
  * Events are plain readonly classes; listeners are resolved via the Container.
  *
- * Usage:
- *   Event::dispatch(new PostPublished($post));
- *   Event::listen(PostPublished::class, NotifySubscribersListener::class);
+ * Usage (inject Dispatcher via constructor):
+ *   $dispatcher->dispatch(new PostPublished($post));
+ *   $dispatcher->listen(PostPublished::class, NotifySubscribersListener::class);
  */
 class Dispatcher
 {

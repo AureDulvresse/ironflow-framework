@@ -57,7 +57,10 @@ class BlogModule extends BaseModule {}
 
 - Un provider est **privé par défaut** : inaccessible hors du module, sauf s'il est listé dans `exports`.
 - Un module ne peut consommer que les providers **exportés** de ses dépendances déclarées dans `imports`.
-- Les violations sont détectées **au démarrage**, pas à l'exécution.
+- Deux niveaux de contrôle, complémentaires :
+  - **Au démarrage** : imports manquants et cycles de dépendances (tri topologique) sont détectés et bloquent le boot.
+  - **À l'exécution** : toute dépendance de constructeur résolue par le conteneur est vérifiée contre les `exports` du module propriétaire — pas seulement au premier niveau, la vérification survit aux chaînes de résolution transitives (service → service → service d'un autre module). Une classe non listée dans `providers:` n'est pas protégée : l'isolation est **opt-in par déclaration explicite**, jamais déduite d'une convention de nommage. `php forge make:controller --module=` ajoute automatiquement le contrôleur généré aux `providers:` de son module.
+  - **Limite connue (v1)** : seule l'injection de constructeur est couverte. Les paramètres injectés directement dans une méthode de contrôleur (`show(Post $post, PostService $service)`) ne bénéficient pas encore de ce contrôle.
 
 ### Graphe de dépendances
 
@@ -232,7 +235,7 @@ php forge migrate --fresh --seed
 
 ```php
 Post::creating(fn(Post $post) => $post->slug = Str::slug($post->title));
-Post::deleted(fn(Post $post) => Cache::forget("post:{$post->id}"));
+Post::deleted(fn(Post $post) => app(CacheManager::class)->forget("post:{$post->id}"));
 ```
 
 ---
@@ -387,7 +390,7 @@ Chaque composant externe est **wrappé derrière nos propres interfaces** dans `
 - [x] CSRF, middlewares globaux et par-route
 - [x] Bus d'événements découplé
 - [x] Extension Twig maison + view composers
-- [ ] Cache — facade unifiée, drivers file/redis
+- [ ] Cache — interface unifiée, drivers file/redis
 - [ ] File d'attente de jobs (queue)
 - [ ] WebSockets / diffusion temps réel
 - [ ] Documentation complète avec recettes

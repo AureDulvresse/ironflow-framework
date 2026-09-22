@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ironflow\Queue;
 
+use Ironflow\Container;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -20,7 +21,8 @@ class Worker
 
     public function __construct(
         private readonly QueueManager $queue,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly Container $container
     ) {
     }
 
@@ -84,6 +86,11 @@ class Worker
 
             $this->queue->release($reserved, $job->retryAfter);
             return 'released';
+        } finally {
+            // Belt-and-braces: a job that throws mid-resolution of a
+            // module-scoped dependency must never leak that module context
+            // into the next job processed by this same long-running worker.
+            $this->container->resetModuleContext();
         }
     }
 

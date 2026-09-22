@@ -70,7 +70,7 @@ class NotificationManager
         if (!method_exists($notification, 'toMail')) {
             return;
         }
-        $message = $notification->toMail($notifiable);
+        $message = $notification->toMail($notifiable, $this->mailer);
         if ($message instanceof PendingMail) {
             $message->send();
         }

@@ -42,9 +42,9 @@ class {$name} extends Notification
         return ['mail', 'database'];
     }
 
-    public function toMail(object \$notifiable): \\Ironflow\\Mail\\PendingMail
+    public function toMail(object \$notifiable, \\Ironflow\\Mail\\Mailer \$mailer): \\Ironflow\\Mail\\PendingMail
     {
-        return \\Ironflow\\Facades\\Mail::to(\$notifiable->email)
+        return \$mailer->to(\$notifiable->email)
             ->subject('Notification')
             ->html('<p>Hello!</p>');
     }
