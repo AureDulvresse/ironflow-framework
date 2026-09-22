@@ -69,6 +69,10 @@ class Kernel
     /**
      * Fail fast if APP_KEY is missing — every request needs it for CSRF and sessions.
      * Console commands bypass this check so that `php forge key:generate` still works.
+     * Caught by handle()'s own catch-all and rendered via the exception handler,
+     * so this never bubbles out of the framework as an uncaught error.
+     *
+     * @throws \RuntimeException If APP_KEY is unset or empty.
      */
     private function validateAppKey(Request $request): void
     {

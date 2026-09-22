@@ -57,6 +57,10 @@ class Pipeline
         return $this;
     }
 
+    /**
+     * @throws \InvalidArgumentException If a pipe entry is neither an object nor a class-name string.
+     * @throws \RuntimeException If a resolved middleware defines neither handle() nor any process*() hook.
+     */
     public function then(callable $destination): Response
     {
         $pipeline = array_reduce(

@@ -173,7 +173,8 @@ class Request extends SymfonyRequest
 
     /**
      * Validate request data (including uploaded files).
-     * Throws ValidationException on failure.
+     *
+     * @throws \Ironflow\Validation\ValidationException If validation fails.
      */
     public function validate(array $rules, array $messages = []): array
     {

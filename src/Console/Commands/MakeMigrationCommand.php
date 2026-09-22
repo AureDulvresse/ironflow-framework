@@ -14,6 +14,7 @@ class MakeMigrationCommand extends Command
     protected string $signature = 'make:migration {name?} {--module=}';
     protected string $description = 'Create a new migration file';
 
+    /** @throws \InvalidArgumentException If the migration name contains a slash or '..'. */
     protected function handle(): int
     {
         $rawName = $this->argumentOrAsk('name', 'Migration name (e.g. create_posts_table):');

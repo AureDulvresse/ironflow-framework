@@ -8,6 +8,9 @@ use Ironflow\Console\Command;
 use Ironflow\Database\Connection;
 use Ironflow\Database\Migrations\Migrator;
 
+/**
+ * Lists every discovered migration and whether it has been run.
+ */
 class MigrateStatusCommand extends Command
 {
     protected string $signature = 'migrate:status';

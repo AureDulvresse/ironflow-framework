@@ -45,7 +45,11 @@ class Schedule
         );
     }
 
-    /** Schedule a forge console command (run as a subprocess). */
+    /**
+     * Schedule a forge console command (run as a subprocess). The callback
+     * itself — not command() — throws \RuntimeException on a non-zero exit
+     * code; ScheduledEvent::run() catches it (see Schedule::run()).
+     */
     public function command(string $command): ScheduledEvent
     {
         return $this->events[] = new ScheduledEvent(

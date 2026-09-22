@@ -55,6 +55,9 @@ abstract class FormRequest extends Request
     /**
      * Called by the Router right after the FormRequest is injected.
      * Runs authorization then validation; throws on failure.
+     *
+     * @throws HttpException 403 if authorize() returns false.
+     * @throws \Ironflow\Validation\ValidationException If validation fails.
      */
     public function validateResolved(): void
     {

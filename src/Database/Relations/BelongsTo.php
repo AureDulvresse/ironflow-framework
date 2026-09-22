@@ -13,12 +13,17 @@ use Ironflow\Support\Collection;
  */
 class BelongsTo extends Relation
 {
+    /**
+     * @param string $foreignKey e.g. post_id (on the child model)
+     * @param string $ownerKey e.g. id (on the parent model)
+     * @param mixed $foreignKeyValue the actual value of post_id on this instance
+     */
     public function __construct(
         \Ironflow\Database\Connection $connection,
         Model $related,
-        string $foreignKey,   // e.g. post_id (on the child model)
-        string $ownerKey,     // e.g. id (on the parent model)
-        mixed $foreignKeyValue // the actual value of post_id on this instance
+        string $foreignKey,
+        string $ownerKey,
+        mixed $foreignKeyValue
     ) {
         parent::__construct($connection, $related, $foreignKey, $ownerKey, $foreignKeyValue);
     }

@@ -7,6 +7,10 @@ namespace Ironflow\Middleware;
 use Ironflow\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Trims leading/trailing whitespace from every string input field, except
+ * password-like fields listed in $except.
+ */
 class TrimStrings
 {
     private array $except = ['password', 'password_confirmation', 'current_password'];

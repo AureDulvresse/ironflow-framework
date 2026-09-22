@@ -17,6 +17,8 @@ final class ShieldConfig
      * @param array<string, string|false|null> $headers Extra/override security headers.
      * @param array{max_age?: int, include_subdomains?: bool, preload?: bool} $hsts
      *        Set max_age to 0 to disable HSTS entirely.
+     * @param string $cspPreset 'strict'|'relaxed'; any other value yields an
+     *        empty base policy — only $cspDirectives applies.
      * @param array<string, string[]> $cspDirectives Merged onto the preset.
      * @param string[] $csrfExcept fnmatch patterns exempt from CSRF verification.
      */

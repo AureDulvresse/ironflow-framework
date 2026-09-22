@@ -8,7 +8,7 @@ use Ironflow\Application;
 use Ironflow\Database\Connection;
 
 /**
- * Schema facade — create, alter, drop tables.
+ * Static entry point for schema operations — create, alter, drop tables.
  *
  * Dialect support: SQLite · MySQL / MariaDB · PostgreSQL · generic fallback.
  * All SQL is generated from the Table definition without going through Doctrine's DDL

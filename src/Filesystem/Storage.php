@@ -38,6 +38,7 @@ class Storage
 
     // ── Disk selection ───────────────────────────────────────────────
 
+    /** @throws \RuntimeException If $name (or the default disk) is configured for `s3` but league/flysystem-aws-s3-v3 isn't installed. */
     public static function disk(?string $name = null): static
     {
         $name ??= self::defaultDiskName();

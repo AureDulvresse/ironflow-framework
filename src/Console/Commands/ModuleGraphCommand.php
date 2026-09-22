@@ -7,6 +7,11 @@ namespace Ironflow\Console\Commands;
 use Ironflow\Console\Command;
 use Ironflow\Module\ModuleManager;
 
+/**
+ * Prints the module dependency graph (imports/exports) computed by
+ * ModuleManager; `--check` additionally validates it for cycles or
+ * missing imports.
+ */
 class ModuleGraphCommand extends Command
 {
     protected string $signature = 'module:graph {--check}';

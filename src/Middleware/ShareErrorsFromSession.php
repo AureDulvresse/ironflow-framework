@@ -9,6 +9,10 @@ use Ironflow\Session\SessionManager;
 use Ironflow\Template\Engine;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Pulls the `_errors`/`_old_input` flashed by a failed validation redirect
+ * out of the session and shares them as Twig globals for the next request.
+ */
 class ShareErrorsFromSession
 {
     public function __construct(

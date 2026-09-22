@@ -21,6 +21,7 @@ class Migrator
         $this->ensureTable();
     }
 
+    /** @throws \RuntimeException If a discovered migration file doesn't return a Migration instance, or its class can't be found. */
     public function run(string $path): array
     {
         $pending = $this->getPendingMigrations($path);
@@ -57,6 +58,7 @@ class Migrator
         return $ran;
     }
 
+    /** @throws \RuntimeException If a migration file doesn't return a Migration instance, or its class can't be found. */
     public function rollback(string $path): array
     {
         $lastBatch = $this->getLastBatch();

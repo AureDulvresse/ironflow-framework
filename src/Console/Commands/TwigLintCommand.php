@@ -8,6 +8,11 @@ use Ironflow\Console\Command;
 use Ironflow\Template\Engine;
 use Twig\Error\SyntaxError;
 
+/**
+ * Compiles every Twig template found under resources/views and under each
+ * module's Views directory, to catch syntax errors without actually
+ * rendering a request.
+ */
 class TwigLintCommand extends Command
 {
     protected string $signature = 'twig:lint {path=}';

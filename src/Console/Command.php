@@ -195,6 +195,9 @@ abstract class Command extends SymfonyCommand
      * here (caught centrally in execute()) means a stray `../` or a
      * syntax-breaking character fails the command instead of silently
      * writing wherever the input points or generating invalid PHP.
+     *
+     * @throws \InvalidArgumentException If $name isn't a valid PHP identifier
+     *                                   (optionally with sub-namespace segments).
      */
     protected function validClassName(string $name): string
     {

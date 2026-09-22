@@ -9,12 +9,17 @@ use Ironflow\Exceptions\HttpException;
 use Ironflow\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Rejects the request unless the given guard (default: `session`) has an
+ * authenticated user.
+ */
 class Authenticate
 {
     public function __construct(private readonly AuthManager $auth)
     {
     }
 
+    /** @throws HttpException 401 for a JSON request, 302 (redirect to login) otherwise. */
     public function handle(Request $request, callable $next, string $guard = 'session'): Response
     {
         if (!$this->auth->guard($guard)->check()) {

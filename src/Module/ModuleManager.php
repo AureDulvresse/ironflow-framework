@@ -34,6 +34,7 @@ class ModuleManager
     ) {
     }
 
+    /** @throws ModuleException If $moduleClass is missing the #[Module] attribute. */
     public function register(string $moduleClass): void
     {
         if (isset($this->modules[$moduleClass])) {
@@ -58,6 +59,7 @@ class ModuleManager
         $this->modules[$moduleClass] = $instance;
     }
 
+    /** @throws ModuleException If a declared import isn't registered, or a circular dependency exists between modules. */
     public function boot(): void
     {
         $this->validate();

@@ -91,7 +91,12 @@ class HttpResponse
         return (object) (json_decode($this->body(), false) ?? new \stdClass());
     }
 
-    /** Throw an HttpException when the response indicates an error. */
+    /**
+     * Throws when the response indicates an error (4xx/5xx or a transport
+     * failure — see failed()).
+     *
+     * @throws \RuntimeException
+     */
     public function throw(): self
     {
         if ($this->failed()) {

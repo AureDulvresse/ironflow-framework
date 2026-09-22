@@ -9,6 +9,11 @@ use Ironflow\Http\RedirectResponse;
 use Ironflow\Session\SessionManager;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Starts the session before the request is handled, flashes any pending
+ * RedirectResponse data into it, and persists it (writing the session
+ * cookie) once the response comes back.
+ */
 class StartSession
 {
     public function __construct(private readonly SessionManager $session)

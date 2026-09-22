@@ -9,6 +9,11 @@ use Ironflow\Http\Request;
 use Ironflow\Http\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Inverse of Authenticate: redirects to `/` if the given guard (default:
+ * `session`) already has an authenticated user — for guest-only routes
+ * like the login form.
+ */
 class RedirectIfAuthenticated
 {
     public function __construct(private readonly AuthManager $auth)

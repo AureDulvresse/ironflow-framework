@@ -109,7 +109,11 @@ abstract class Controller
 
     // ── Authorization ─────────────────────────────────────────────────
 
-    /** Abort with 403 if the current user cannot perform the given ability. */
+    /**
+     * Abort with 403 if the current user cannot perform the given ability.
+     *
+     * @throws HttpException 403 if the ability check fails or itself throws.
+     */
     protected function authorize(string $ability, mixed $arguments = []): void
     {
         try {

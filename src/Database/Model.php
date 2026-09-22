@@ -450,6 +450,7 @@ abstract class Model
         return static::query()->where(static::make()->primaryKey, $id)->first();
     }
 
+    /** @throws \Ironflow\Exceptions\HttpException 404 if no row matches $id. */
     public static function findOrFail(int|string $id): static
     {
         $model = static::find($id);
@@ -469,6 +470,7 @@ abstract class Model
         return static::query()->first();
     }
 
+    /** @throws \Ironflow\Exceptions\HttpException 404 if the query has no results. */
     public static function firstOrFail(): static
     {
         $model = static::first();
@@ -663,6 +665,10 @@ abstract class Model
 
     // ─────────────────────── Serialization ───────────────────────────
 
+    /**
+     * @return array<string, mixed> Visible/non-hidden attributes (cast), plus
+     *         appended virtual attributes and any eager-loaded relations.
+     */
     public function toArray(): array
     {
         $result = [];

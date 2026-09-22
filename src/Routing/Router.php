@@ -108,6 +108,7 @@ class Router
 
     // ─────────────────────── URL generation ──────────────────────────
 
+    /** @throws \RuntimeException If no route is registered under $name. */
     public function route(string $name, array $params = []): string
     {
         $route = $this->routes->getByName($name);
@@ -121,6 +122,11 @@ class Router
 
     // ─────────────────────── Dispatching ────────────────────────────
 
+    /**
+     * @throws HttpException 404/405 if no route matches, via RouteCollection::match().
+     * @throws \RuntimeException If the matched route's action isn't callable, or a
+     *                          required controller method parameter can't be resolved.
+     */
     public function dispatch(Request $request): Response
     {
         [$route, $params] = $this->routes->match($request->getMethod(), $request->getPathInfo());
