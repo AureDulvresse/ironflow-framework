@@ -27,6 +27,7 @@ class AuthManager
         $this->defaultGuard = $config['defaults']['guard'] ?? 'session';
     }
 
+    /** @throws \InvalidArgumentException If $name (or the default guard) has no matching driver in config. */
     public function guard(?string $name = null): GuardInterface
     {
         $name ??= $this->defaultGuard;
@@ -68,6 +69,7 @@ class AuthManager
         $this->guard()->logout();
     }
 
+    /** @throws \RuntimeException If the `jwt` guard is not configured. */
     public function createToken(object $user, array $claims = []): string
     {
         $guard = $this->guard('jwt');

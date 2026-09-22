@@ -31,6 +31,7 @@ class VerifyCsrfToken
     ) {
     }
 
+    /** @throws HttpException 419 if the request is state-changing, not exempt, and the token doesn't match. */
     public function handle(Request $request, callable $next): Response
     {
         if ($this->isReading($request) || $this->inExceptArray($request) || $this->tokensMatch($request)) {

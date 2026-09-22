@@ -49,6 +49,7 @@ if (!function_exists('route')) {
 }
 
 if (!function_exists('abort')) {
+    /** @throws HttpException Always — this is how HttpException is meant to be raised from app code. */
     function abort(int $code, string $message = ''): never
     {
         throw new HttpException($code, $message);

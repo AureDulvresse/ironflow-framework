@@ -42,6 +42,10 @@ class RouteCollection
     /**
      * Match a request. Returns [Route, params] or throws HttpException.
      */
+    /**
+     * @throws HttpException 405 if $uri matches a route but not for $method,
+     *                       404 if it matches no route at all.
+     */
     public function match(string $method, string $uri): array
     {
         $method = strtoupper($method);

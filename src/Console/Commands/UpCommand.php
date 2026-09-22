@@ -6,6 +6,10 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Takes the application out of maintenance mode by removing the
+ * storage/maintenance.flag file written by `down`.
+ */
 class UpCommand extends Command
 {
     protected string $signature = 'up';

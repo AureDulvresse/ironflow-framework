@@ -94,6 +94,11 @@ class Container
 
     /**
      * @param class-string|string $abstract
+     *
+     * @throws \Ironflow\Exceptions\ContainerException If $abstract can't be reflected or
+     *         instantiated, a constructor parameter can't be resolved (no type hint,
+     *         no default, no #[Inject]), an #[Inject] key matches no binding/config, or
+     *         $callerModule resolves a binding its module doesn't export.
      */
     public function make(string $abstract, array $overrides = [], ?string $callerModule = null): mixed
     {

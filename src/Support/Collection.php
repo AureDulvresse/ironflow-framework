@@ -20,8 +20,10 @@ use Traversable;
  */
 class Collection implements ArrayAccess, Countable, IteratorAggregate, JsonSerializable
 {
+    /** @param array<int|string, mixed> $items */
     public function __construct(private array $items = []) {}
 
+    /** @param array<int|string, mixed> $items */
     public static function make(array $items = []): static
     {
         return new static($items);
@@ -165,6 +167,7 @@ class Collection implements ArrayAccess, Countable, IteratorAggregate, JsonSeria
         return new static(array_keys($this->items));
     }
 
+    /** @param array<int|string, mixed>|self $items */
     public function merge(array|self $items): static
     {
         $items = $items instanceof static ? $items->toArray() : $items;
@@ -261,6 +264,7 @@ class Collection implements ArrayAccess, Countable, IteratorAggregate, JsonSeria
 
     // ─────────────────────── Conversion ──────────────────────────────
 
+    /** @return array<int|string, mixed> Items recursively converted via their own toArray(), where present. */
     public function toArray(): array
     {
         return array_map(function ($item) {
@@ -322,6 +326,7 @@ class Collection implements ArrayAccess, Countable, IteratorAggregate, JsonSeria
         return new ArrayIterator($this->items);
     }
 
+    /** @return array<int|string, mixed> The raw, un-recursed items — see toArray() for a deep conversion. */
     public function all(): array
     {
         return $this->items;

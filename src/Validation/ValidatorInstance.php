@@ -42,6 +42,7 @@ class ValidatorInstance
     ) {
     }
 
+    /** @throws \InvalidArgumentException If $rules names a rule this validator doesn't recognise. */
     public function fails(): bool
     {
         if (!$this->validated_flag) {
@@ -50,11 +51,13 @@ class ValidatorInstance
         return !empty($this->errors);
     }
 
+    /** @throws \InvalidArgumentException See fails(). */
     public function passes(): bool
     {
         return !$this->fails();
     }
 
+    /** @throws \InvalidArgumentException See fails(). */
     public function errors(): array
     {
         if (!$this->validated_flag) {
@@ -63,6 +66,7 @@ class ValidatorInstance
         return $this->errors;
     }
 
+    /** @throws \InvalidArgumentException See fails(). */
     public function validated(): array
     {
         if (!$this->validated_flag) {

@@ -53,6 +53,8 @@ class QueueManager
      * Reserve and return the next available job on the given queue, or null.
      * Uses a transaction + locking update to avoid two workers grabbing the
      * same row.
+     *
+     * @throws \RuntimeException If the reserved row's payload doesn't unserialize to a Job.
      */
     public function pop(string $queue = 'default'): ?ReservedJob
     {

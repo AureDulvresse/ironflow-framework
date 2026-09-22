@@ -7,6 +7,9 @@ namespace Ironflow\Console\Commands;
 use Ironflow\Console\Command;
 use Ironflow\Routing\Router;
 
+/**
+ * Prints every registered route: method, URI, name, action, and middleware.
+ */
 class RouteListCommand extends Command
 {
     protected string $signature   = 'route:list';

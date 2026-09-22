@@ -53,10 +53,10 @@ abstract class ApiController extends Controller
     /**
      * Return a paginated response.
      *
-     * @param array $items    Current page items (already sliced)
-     * @param int   $total    Total number of records
-     * @param int   $perPage  Items per page
-     * @param int   $page     Current page (1-based)
+     * @param array<int, mixed> $items Current page items (already sliced)
+     * @param int $total Total number of records
+     * @param int $perPage Items per page
+     * @param int $page Current page (1-based)
      */
     protected function paginate(
         array  $items,

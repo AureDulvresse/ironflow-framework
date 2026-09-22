@@ -9,12 +9,18 @@ use Ironflow\Exceptions\HttpException;
 use Ironflow\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Blocks every request with a 503 while storage/maintenance.flag exists
+ * (written by the `down` command), unless the request carries the flag's
+ * bypass secret in a `maintenance_bypass` cookie.
+ */
 class MaintenanceMode
 {
     public function __construct(private readonly Application $app)
     {
     }
 
+    /** @throws HttpException 503, unless the request holds a valid bypass cookie. */
     public function handle(Request $request, callable $next): Response
     {
         $flag = $this->app->path('storage', 'maintenance.flag');

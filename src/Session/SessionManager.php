@@ -101,6 +101,7 @@ class SessionManager
         $this->session->set('_csrf_token', bin2hex(random_bytes(32)));
     }
 
+    /** @throws \RuntimeException If called before start() has run. */
     public function csrfToken(): string
     {
         if (!$this->started) {
