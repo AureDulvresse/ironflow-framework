@@ -8,15 +8,11 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-22
+
 ### Added
 
 - **CI GitHub Actions** (`.github/workflows/ci.yml`) — exécute `composer test` (Pest) sur PHP 8.2/8.3/8.4 en matrice et `composer analyse` (PHPStan niveau 6, annotations inline sur les PR) à chaque push sur `main`/`develop` et sur chaque pull request. Jusqu'ici la suite de tests et l'analyse statique ne tournaient que si quelqu'un pensait à les lancer manuellement. Badge de statut ajouté au README.
-
-### Fixed
-
-- **`composer.lock` verrouillait des paquets Symfony `^8.1` qui exigent en réalité PHP ≥8.4.1, alors que `composer.json` annonce `"php": ">=8.2"`.** Invisible en local (poste de dev en PHP 8.5), révélé immédiatement par la CI qui vient d'être ajoutée : `composer install` échouait sur les jobs PHP 8.2/8.3. Les 8 paquets `symfony/*` sont rétrogradés vers `^7.0` (résolu en 7.4.x, compatible PHP 8.2+) ; `config.platform.php` fixé à `8.2.0` dans `composer.json` pour que toute résolution future de `composer.lock` respecte la borne basse annoncée, même sur un poste avec un PHP plus récent — c'est exactement ce qui a permis à cette incohérence de passer inaperçue jusqu'ici.
-
-## [2.0.0] - 2026-09-22
 
 ### Security
 
@@ -48,6 +44,9 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 - `BelongsToMany::detach(int|array $ids = null)` — dépréciation PHP 8.4 (paramètre implicitement nullable) corrigée en `int|array|null`.
 - **`withCount()` bypassait aussi les scopes globaux, sur tous les types de relation, et générait du SQL invalide pour deux d'entre eux.** `Relation::eagerLoadCount()` (utilisée par `HasOne`/`HasMany`) construisait du SQL brut sans passer par `ModelQueryBuilder` — réécrite pour l'utiliser, donc désormais scope-aware comme `getResults()`/`eagerLoad()`. `BelongsTo::eagerLoadCount()` héritait de cette même méthode de base alors qu'elle référence une colonne absente de la table du modèle "owner" (la FK vit sur la table enfant, pas sur celle du related) — aurait fait échouer `withCount()` sur n'importe quelle relation `belongsTo` avec une erreur SQL ; remplacée par un calcul local (0 ou 1 selon que la FK est renseignée), sans requête. `BelongsToMany`/`HasManyThrough` (déjà réécrites ci-dessus pour `getResults()`/`eagerLoad()`) reçoivent le même traitement pour `eagerLoadCount()`, avec jointure vers la table related plutôt qu'un comptage brut de la table pivot/intermédiaire.
 - **`firstOrCreate()`/`updateOrCreate()` : la fenêtre de course entre le SELECT et l'INSERT ne fait plus planter la requête.** Ces méthodes restent un SELECT puis un INSERT — ça ne peut être rendu réellement atomique que par une contrainte unique en base (aucun code applicatif seul ne peut le garantir) — mais si deux appels concurrents trouvent tous les deux "rien" et tentent tous les deux de créer la ligne, le perdant lève désormais une exception de conflit qui est interceptée pour relire la ligne que le gagnant vient de créer, au lieu de laisser planter tel quel une `UniqueConstraintViolationException` de Doctrine DBAL non gérée. Une vraie violation d'intégrité sans rapport avec une course (aucune ligne ne correspond aux critères de recherche même après la relecture) continue à se propager normalement.
+
+
+- **`composer.lock` verrouillait des paquets Symfony `^8.1` qui exigent en réalité PHP ≥8.4.1, alors que `composer.json` annonce `"php": ">=8.2"`.** Invisible en local (poste de dev en PHP 8.5), révélé immédiatement par la CI qui vient d'être ajoutée : `composer install` échouait sur les jobs PHP 8.2/8.3. Les 8 paquets `symfony/*` sont rétrogradés vers `^7.0` (résolu en 7.4.x, compatible PHP 8.2+) ; `config.platform.php` fixé à `8.2.0` dans `composer.json` pour que toute résolution future de `composer.lock` respecte la borne basse annoncée, même sur un poste avec un PHP plus récent — c'est exactement ce qui a permis à cette incohérence de passer inaperçue jusqu'ici.
 
 ### Removed
 
