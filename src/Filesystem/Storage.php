@@ -260,30 +260,18 @@ class Storage
 
     private static function diskConfigFor(string $name): array
     {
-        try {
-            $config = Application::getInstance()->getContainer()->make(\Ironflow\Config\Repository::class);
-            return (array) $config->get("filesystems.disks.{$name}", []);
-        } catch (\Throwable) {
-            return [];
-        }
+        $config = Application::getInstance()->getContainer()->make(\Ironflow\Config\Repository::class);
+        return (array) $config->get("filesystems.disks.{$name}", []);
     }
 
     private static function defaultDiskName(): string
     {
-        try {
-            $config = Application::getInstance()->getContainer()->make(\Ironflow\Config\Repository::class);
-            return (string) $config->get('filesystems.default', 'local');
-        } catch (\Throwable) {
-            return 'local';
-        }
+        $config = Application::getInstance()->getContainer()->make(\Ironflow\Config\Repository::class);
+        return (string) $config->get('filesystems.default', 'local');
     }
 
     private static function defaultRoot(): string
     {
-        try {
-            return Application::getInstance()->path('storage', 'app');
-        } catch (\Throwable) {
-            return sys_get_temp_dir() . '/ironflow';
-        }
+        return Application::getInstance()->path('storage', 'app');
     }
 }

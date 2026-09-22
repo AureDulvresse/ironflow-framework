@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new queue Job class.
+ */
 class MakeJobCommand extends Command
 {
     protected string $signature   = 'make:job {name?} {--module=}';
@@ -13,8 +16,8 @@ class MakeJobCommand extends Command
 
     protected function handle(): int
     {
-        $name   = $this->argumentOrAsk('name', 'Job name (e.g. SendWelcomeEmail):');
-        $module = $this->option('module');
+        $name   = $this->validClassName($this->argumentOrAsk('name', 'Job name (e.g. SendWelcomeEmail):'));
+        $module = $this->moduleOption();
 
         if ($module) {
             $path = base_path("modules/{$module}/Jobs/{$name}.php");

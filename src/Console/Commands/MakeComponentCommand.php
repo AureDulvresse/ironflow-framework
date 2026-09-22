@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a view Component class alongside its Twig template.
+ */
 class MakeComponentCommand extends Command
 {
     protected string $signature = 'make:component {name? : Component name in PascalCase (e.g. Alert)} {--module= : Target module}';
@@ -13,8 +16,8 @@ class MakeComponentCommand extends Command
 
     public function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Component name (PascalCase, e.g. Alert):');
-        $module = (string) $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Component name (PascalCase, e.g. Alert):'));
+        $module = (string) ($this->moduleOption() ?? '');
         $slug = $this->toKebab($name);
 
         [$phpNs, $phpDir, $viewDir] = $this->resolvePaths($name, $module);

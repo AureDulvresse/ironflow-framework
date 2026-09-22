@@ -11,10 +11,13 @@ use Symfony\Component\HttpFoundation\Response;
 
 class MaintenanceMode
 {
+    public function __construct(private readonly Application $app)
+    {
+    }
+
     public function handle(Request $request, callable $next): Response
     {
-        $app = Application::getInstance();
-        $flag = $app->path('storage', 'maintenance.flag');
+        $flag = $this->app->path('storage', 'maintenance.flag');
 
         if (!is_file($flag)) {
             return $next($request);

@@ -7,6 +7,10 @@ namespace Ironflow\Console\Commands;
 use Ironflow\Console\Command;
 use Ironflow\Container;
 
+/**
+ * Resolves a Seeder class from the container (DatabaseSeeder by default,
+ * or `--class`) and runs it.
+ */
 class DbSeedCommand extends Command
 {
     protected string $signature = 'db:seed {--class=DatabaseSeeder}';

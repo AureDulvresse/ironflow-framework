@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new event class, dispatched via the Dispatcher.
+ */
 class MakeEventCommand extends Command
 {
     protected string $signature = 'make:event {name?} {--module=}';
@@ -13,8 +16,8 @@ class MakeEventCommand extends Command
 
     protected function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Event name (e.g. UserRegistered):');
-        $module = $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Event name (e.g. UserRegistered):'));
+        $module = $this->moduleOption();
 
         $path = $module
             ? base_path("modules/{$module}/Events/{$name}.php")

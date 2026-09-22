@@ -6,6 +6,10 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new event listener class and, when generated inside a module
+ * (`--module`), registers it in that module's `providers:`.
+ */
 class MakeListenerCommand extends Command
 {
     protected string $signature = 'make:listener {name?} {--event=} {--module=}';
@@ -13,9 +17,10 @@ class MakeListenerCommand extends Command
 
     protected function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Listener name (e.g. SendWelcomeEmail):');
-        $event = $this->option('event') ?? 'SomeEvent';
-        $module = $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Listener name (e.g. SendWelcomeEmail):'));
+        $rawEvent = $this->option('event');
+        $event = $this->validClassName(is_string($rawEvent) && $rawEvent !== '' ? $rawEvent : 'SomeEvent');
+        $module = $this->moduleOption();
 
         $path = $module
             ? base_path("modules/{$module}/Listeners/{$name}.php")
@@ -40,6 +45,11 @@ class {$name}
 }
 PHP);
         $this->success("Listener [{$name}] created.");
+
+        if ($module) {
+            $this->registerAsProvider($module, "{$ns}\\{$name}");
+        }
+
         return self::SUCCESS;
     }
 }

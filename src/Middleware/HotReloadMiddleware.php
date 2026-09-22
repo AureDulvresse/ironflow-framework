@@ -26,6 +26,10 @@ class HotReloadMiddleware
 {
     private const PING_PATH = '/__ironflow/ping';
 
+    public function __construct(private readonly Application $app)
+    {
+    }
+
     public function handle(Request $request, callable $next): Response
     {
         if (!$this->isDevMode()) {
@@ -69,7 +73,7 @@ class HotReloadMiddleware
      */
     private function computeHash(): string
     {
-        $basePath = Application::getInstance()->getBasePath();
+        $basePath = $this->app->getBasePath();
         $watchDirs = [
             $basePath . '/app',
             $basePath . '/modules',

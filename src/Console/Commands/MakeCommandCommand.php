@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new console command class extending Command.
+ */
 class MakeCommandCommand extends Command
 {
     protected string $signature = 'make:command {name?} {--module=}';
@@ -13,8 +16,8 @@ class MakeCommandCommand extends Command
 
     protected function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Command class name (e.g. SendReportCommand):');
-        $module = $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Command class name (e.g. SendReportCommand):'));
+        $module = $this->moduleOption();
 
         if ($module) {
             $path = base_path("modules/{$module}/Commands/{$name}.php");

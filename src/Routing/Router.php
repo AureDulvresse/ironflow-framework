@@ -23,6 +23,9 @@ class Router
 {
     private RouteCollection $routes;
 
+    /** The route matched by the current dispatch(), if any. */
+    private ?Route $currentRoute = null;
+
     /** Group attribute stack (prefix, middleware, namespace) */
     private array $groupStack = [];
 
@@ -121,6 +124,7 @@ class Router
     public function dispatch(Request $request): Response
     {
         [$route, $params] = $this->routes->match($request->getMethod(), $request->getPathInfo());
+        $this->currentRoute = $route;
         $request->setRouteParams($params);
 
         $middlewares = $this->resolveMiddlewares($route->getMiddlewares());
@@ -138,6 +142,12 @@ class Router
     public function getRoutes(): RouteCollection
     {
         return $this->routes;
+    }
+
+    /** The route matched by the most recent dispatch() call on this Router, if any. */
+    public function getCurrentRoute(): ?Route
+    {
+        return $this->currentRoute;
     }
 
     public function setMiddlewareAliases(array $aliases): void

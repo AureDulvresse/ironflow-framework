@@ -6,6 +6,7 @@ namespace Ironflow\Database\Relations;
 
 use Ironflow\Database\Connection;
 use Ironflow\Database\Model;
+use Ironflow\Database\ModelQueryBuilder;
 use Ironflow\Support\Collection;
 
 /**
@@ -28,17 +29,13 @@ class HasManyThrough extends Relation
 
     public function getResults(): Collection
     {
-        $relatedTable = $this->related->getTableName();
-        $throughTable = $this->through->getTableName();
-        $class = get_class($this->related);
+        if ($this->parentKeyValue === null) {
+            return new Collection();
+        }
 
-        $sql = "SELECT {$relatedTable}.* FROM {$relatedTable} "
-            . "INNER JOIN {$throughTable} ON {$throughTable}.{$this->secondLocalKey} = {$relatedTable}.{$this->secondKey} "
-            . "WHERE {$throughTable}.{$this->foreignKey} = ?";
-
-        $rows = $this->connection->select($sql, [$this->parentKeyValue]);
-
-        return $this->hydrateModels($rows, $class);
+        return $this->baseQuery()
+            ->where("{$this->through->getTableName()}.{$this->foreignKey}", $this->parentKeyValue)
+            ->get();
     }
 
     public function eagerLoad(Collection $models, ?callable $constraint): Collection
@@ -48,18 +45,35 @@ class HasManyThrough extends Relation
             return new Collection();
         }
 
+        $qb = $this->baseQuery(withThroughParent: true)
+            ->whereIn("{$this->through->getTableName()}.{$this->foreignKey}", $keys);
+
+        if ($constraint !== null) {
+            $constraint($qb);
+        }
+
+        return $qb->get();
+    }
+
+    /**
+     * Builds the join query via ModelQueryBuilder (rather than raw SQL) so
+     * that the related model's global scopes — e.g. SoftDeletes — are
+     * applied automatically, same as HasOne/HasMany/BelongsTo.
+     */
+    private function baseQuery(bool $withThroughParent = false): ModelQueryBuilder
+    {
         $relatedTable = $this->related->getTableName();
         $throughTable = $this->through->getTableName();
         $class = get_class($this->related);
-        $placeholders = implode(',', array_fill(0, count($keys), '?'));
 
-        $sql = "SELECT {$relatedTable}.*, {$throughTable}.{$this->foreignKey} as _through_parent "
-            . "FROM {$relatedTable} "
-            . "INNER JOIN {$throughTable} ON {$throughTable}.{$this->secondLocalKey} = {$relatedTable}.{$this->secondKey} "
-            . "WHERE {$throughTable}.{$this->foreignKey} IN ({$placeholders})";
+        $columns = ["{$relatedTable}.*"];
+        if ($withThroughParent) {
+            $columns[] = "{$throughTable}.{$this->foreignKey} as _through_parent";
+        }
 
-        $rows = $this->connection->select($sql, $keys);
-        return $this->hydrateModels($rows, $class);
+        return (new ModelQueryBuilder($this->connection, $relatedTable, $class))
+            ->select($columns)
+            ->join($throughTable, "{$throughTable}.{$this->secondLocalKey}", '=', "{$relatedTable}.{$this->secondKey}");
     }
 
     public function match(Collection $models, Collection $results, string $relation): void
@@ -77,16 +91,43 @@ class HasManyThrough extends Relation
         }
     }
 
-    private function hydrateModels(array $rows, string $class): Collection
+    /**
+     * Overrides the base Relation::eagerLoadCount(), which assumes
+     * $foreignKey lives directly on the related table — for a "through"
+     * relation it lives on the through table instead, so the base
+     * implementation would generate SQL referencing a column that doesn't
+     * exist on $relatedTable. Built via ModelQueryBuilder (rather than raw
+     * SQL) so the related model's global scopes — e.g. SoftDeletes — are
+     * honoured in the count, same as getResults()/eagerLoad().
+     */
+    public function eagerLoadCount(Collection $models, string $countKey): void
     {
-        $models = [];
-        foreach ($rows as $row) {
-            $model = new $class();
-            $model->setRawAttributes($row);
-            $model->setOriginal($row);
-            $model->setExists(true);
-            $models[] = $model;
+        $keys = $this->getParentKeys($models);
+        if (empty($keys)) {
+            return;
         }
-        return new Collection($models);
+
+        $relatedTable = $this->related->getTableName();
+        $throughTable = $this->through->getTableName();
+        $class = get_class($this->related);
+
+        $qb = (new ModelQueryBuilder($this->connection, $relatedTable, $class))
+            ->select("{$throughTable}.{$this->foreignKey} as _k", 'COUNT(*) as cnt')
+            ->join($throughTable, "{$throughTable}.{$this->secondLocalKey}", '=', "{$relatedTable}.{$this->secondKey}")
+            ->whereIn("{$throughTable}.{$this->foreignKey}", $keys)
+            ->groupBy("{$throughTable}.{$this->foreignKey}");
+
+        [$sql, $bindings] = $qb->toSql();
+        $rows = $this->connection->select($sql, $bindings);
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['_k']] = (int) $row['cnt'];
+        }
+
+        foreach ($models as $model) {
+            $parentId = $model->{$this->localKey};
+            $model->setRawAttribute($countKey, $map[$parentId] ?? 0);
+        }
     }
 }

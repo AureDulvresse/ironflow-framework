@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new HTTP middleware class.
+ */
 class MakeMiddlewareCommand extends Command
 {
     protected string $signature = 'make:middleware {name?}';
@@ -13,7 +16,7 @@ class MakeMiddlewareCommand extends Command
 
     protected function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Middleware name (e.g. AuthMiddleware):');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Middleware name (e.g. AuthMiddleware):'));
         $path = base_path("app/Middleware/{$name}.php");
         @mkdir(dirname($path), 0755, true);
 

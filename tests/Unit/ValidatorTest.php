@@ -93,3 +93,8 @@ test('boolean rule accepts valid boolean values', function () {
     }
     expect(makeValidator(['active' => 'yes'], ['active' => 'boolean'])->fails())->toBeTrue();
 });
+
+test('an unknown validation rule throws instead of silently passing', function () {
+    expect(fn () => makeValidator(['name' => 'Alice'], ['name' => 'bogus_rule'])->fails())
+        ->toThrow(InvalidArgumentException::class, 'Unknown validation rule [bogus_rule]');
+});

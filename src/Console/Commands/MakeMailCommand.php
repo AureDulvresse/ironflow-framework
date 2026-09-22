@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new Mailable class.
+ */
 class MakeMailCommand extends Command
 {
     protected string $signature   = 'make:mail {name?} {--module=}';
@@ -13,8 +16,8 @@ class MakeMailCommand extends Command
 
     protected function handle(): int
     {
-        $name   = $this->argumentOrAsk('name', 'Mailable name (e.g. WelcomeMail):');
-        $module = $this->option('module');
+        $name   = $this->validClassName($this->argumentOrAsk('name', 'Mailable name (e.g. WelcomeMail):'));
+        $module = $this->moduleOption();
 
         if ($module) {
             $path = base_path("modules/{$module}/Mail/{$name}.php");

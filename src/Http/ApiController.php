@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Ironflow\Http;
 
-use Ironflow\Application;
 use Ironflow\Http\Resources\JsonResource;
 use Ironflow\Http\Resources\ResourceCollection;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -148,15 +147,11 @@ abstract class ApiController extends Controller
     private function serialize(mixed $data): mixed
     {
         if ($data instanceof JsonResource) {
-            return $data->toArray(
-                Application::getInstance()->getContainer()->make(Request::class)
-            );
+            return $data->toArray($this->request);
         }
 
         if ($data instanceof ResourceCollection) {
-            return $data->toArray(
-                Application::getInstance()->getContainer()->make(Request::class)
-            );
+            return $data->toArray($this->request);
         }
 
         if (is_object($data) && method_exists($data, 'toArray')) {
@@ -172,14 +167,9 @@ abstract class ApiController extends Controller
 
     private function pageUrl(int $page): string
     {
-        try {
-            $request = Application::getInstance()->getContainer()->make(Request::class);
-            $params  = array_merge($request->query->all(), ['page' => $page]);
-            $qs      = http_build_query($params);
-            return $request->getSchemeAndHttpHost() . $request->getBaseUrl() . $request->getPathInfo()
-                . ($qs ? '?' . $qs : '');
-        } catch (\Throwable) {
-            return '?page=' . $page;
-        }
+        $params = array_merge($this->request->query->all(), ['page' => $page]);
+        $qs     = http_build_query($params);
+        return $this->request->getSchemeAndHttpHost() . $this->request->getBaseUrl() . $this->request->getPathInfo()
+            . ($qs ? '?' . $qs : '');
     }
 }

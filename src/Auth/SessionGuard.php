@@ -13,6 +13,14 @@ use Ironflow\Session\SessionManager;
  */
 class SessionGuard implements GuardInterface
 {
+    /**
+     * A valid Argon2id hash of an arbitrary fixed string. Used so attempt()
+     * always runs a real password_verify() of comparable cost, even when no
+     * user row was found — otherwise the response time would leak whether a
+     * given username/email exists (a classic account-enumeration side channel).
+     */
+    private const DUMMY_HASH = '$argon2id$v=19$m=65536,t=4,p=1$a0cyUHdPYzN6ektjbkp1bg$g39gGl9xBHhPsiEataMzCttOwJU/6j5fuNfZrl0kyp4';
+
     private ?object $user = null;
 
     public function __construct(
@@ -65,11 +73,12 @@ class SessionGuard implements GuardInterface
             [$credentials[$username] ?? '']
         );
 
-        if ($row === null) {
-            return false;
-        }
+        // Always run a real Argon2id verification, even when no row was found,
+        // so response time doesn't reveal whether the account exists.
+        $hash  = $row['password'] ?? self::DUMMY_HASH;
+        $valid = Hash::verify($credentials['password'] ?? '', $hash);
 
-        if (!Hash::verify($credentials['password'] ?? '', $row['password'])) {
+        if ($row === null || !$valid) {
             return false;
         }
 

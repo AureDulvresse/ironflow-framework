@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new Notification class.
+ */
 class MakeNotificationCommand extends Command
 {
     protected string $signature   = 'make:notification {name?} {--module=}';
@@ -13,8 +16,8 @@ class MakeNotificationCommand extends Command
 
     protected function handle(): int
     {
-        $name   = $this->argumentOrAsk('name', 'Notification name (e.g. InvoicePaid):');
-        $module = $this->option('module');
+        $name   = $this->validClassName($this->argumentOrAsk('name', 'Notification name (e.g. InvoicePaid):'));
+        $module = $this->moduleOption();
 
         if ($module) {
             $path = base_path("modules/{$module}/Notifications/{$name}.php");

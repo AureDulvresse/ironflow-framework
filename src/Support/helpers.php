@@ -126,7 +126,7 @@ if (!function_exists('class_basename')) {
     function class_basename(string|object $class): string
     {
         $class = is_object($class) ? get_class($class) : $class;
-        $parts = explode('\\', $class);
+        $parts = preg_split('#[\\\\/]#', $class);
         return end($parts);
     }
 }

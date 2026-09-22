@@ -11,6 +11,11 @@ use Symfony\Component\Mime\Email;
 /**
  * Fluent builder for a single outgoing message.
  * Returned by Mailer::to().
+ *
+ * view() resolves TemplateEngine ambiently via Application::getInstance() —
+ * PendingMail is built by application code (`$mailer->to(...)->view(...)`),
+ * not resolved through the Container, so there's no constructor to inject
+ * into. Same accepted-escape-hatch category as Mailable::renderView().
  */
 class PendingMail
 {

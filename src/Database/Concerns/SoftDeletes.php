@@ -50,16 +50,13 @@ trait SoftDeletes
 
     public static function withTrashed(): ModelQueryBuilder
     {
-        // Remove the soft_delete scope
-        $qb = static::query();
-        // Clear wheres related to deleted_at (simplified)
-        return $qb;
+        return static::query(['soft_delete']);
     }
 
     public static function onlyTrashed(): ModelQueryBuilder
     {
         $instance = new static();
         $col = $instance->getTableName() . '.' . $instance->deletedAt;
-        return static::query()->whereNotNull($col);
+        return static::query(['soft_delete'])->whereNotNull($col);
     }
 }

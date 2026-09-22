@@ -17,10 +17,19 @@ use Symfony\Component\HttpFoundation\Response;
  *
  *  Onion-style (PSR-15 inspired):
  *    handle(Request $req, callable $next, ...$params): Response
+ *    Full control — wrap $next(...) in your own try/catch if you need to
+ *    react to exceptions raised further down the chain.
  *
  *  Hook-style (Django-inspired):
  *    processRequest(Request $req, ...$params): ?Response   — early-return skips the chain
  *    processResponse(Request $req, Response $res, ...$params): Response
+ *    processException(Request $req, \Throwable $e, ...$params): ?Response
+ *      — called when something further down the chain (an inner middleware or
+ *        the destination/controller) throws. Return a Response to recover;
+ *        return null to let the exception keep propagating outward, giving
+ *        the next enclosing middleware (or the global ExceptionHandler) a
+ *        chance. A recovered response still passes through this middleware's
+ *        own processResponse(), exactly like a normal response would.
  *
  * Pipe syntax:
  *   'App\Middleware\Foo'          — FQCN, no parameters
@@ -65,11 +74,12 @@ class Pipeline
             return function (Request $request) use ($next, $pipe): Response {
                 [$middleware, $params] = $this->resolve($pipe);
 
-                $hasProcessRequest  = method_exists($middleware, 'processRequest');
-                $hasProcessResponse = method_exists($middleware, 'processResponse');
+                $hasProcessRequest   = method_exists($middleware, 'processRequest');
+                $hasProcessResponse  = method_exists($middleware, 'processResponse');
+                $hasProcessException = method_exists($middleware, 'processException');
 
-                // Hook-style: either processRequest and/or processResponse.
-                if ($hasProcessRequest || $hasProcessResponse) {
+                // Hook-style: any of processRequest / processResponse / processException.
+                if ($hasProcessRequest || $hasProcessResponse || $hasProcessException) {
                     if ($hasProcessRequest) {
                         $early = $middleware->processRequest($request, ...$params);
                         if ($early instanceof Response) {
@@ -77,7 +87,18 @@ class Pipeline
                         }
                     }
 
-                    $response = $next($request);
+                    try {
+                        $response = $next($request);
+                    } catch (\Throwable $e) {
+                        if (!$hasProcessException) {
+                            throw $e;
+                        }
+                        $recovered = $middleware->processException($request, $e, ...$params);
+                        if (!$recovered instanceof Response) {
+                            throw $e;
+                        }
+                        $response = $recovered;
+                    }
 
                     if ($hasProcessResponse) {
                         $response = $middleware->processResponse($request, $response, ...$params);

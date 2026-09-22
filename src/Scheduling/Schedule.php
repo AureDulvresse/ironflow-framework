@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ironflow\Scheduling;
 
+use Ironflow\Application;
 use Ironflow\Queue\Job;
 use Ironflow\Queue\QueueManager;
 
@@ -16,17 +17,23 @@ use Ironflow\Queue\QueueManager;
  * Define tasks in a module's boot() or a dedicated scheduler file:
  *
  *   $schedule->call(fn() => $cache->flush())->daily();
- *   $schedule->command('db:backup')->dailyAt('02:00');
+ *   $schedule->command('db:backup')->dailyAt('02:00')->withoutOverlapping();
  *   $schedule->job(new PruneStaleSessions())->hourly();
  *   $schedule->call($fn)->everyMinutes(15)->weekdays();
+ *
+ * withoutOverlapping() guards against a run still in progress when the next
+ * one is due (e.g. a slow task on a minute-by-minute cron) via a process-level
+ * file lock — see ScheduledEvent.
  */
 class Schedule
 {
     /** @var ScheduledEvent[] */
     private array $events = [];
 
-    public function __construct(private readonly ?QueueManager $queue = null)
-    {
+    public function __construct(
+        private readonly Application $app,
+        private readonly ?QueueManager $queue = null
+    ) {
     }
 
     /** Schedule a closure to run in-process. */
@@ -44,8 +51,16 @@ class Schedule
         return $this->events[] = new ScheduledEvent(
             function () use ($command) {
                 $php = PHP_BINARY;
-                $forge = \Ironflow\Application::getInstance()->getBasePath('forge');
-                $cmd = escapeshellarg($php) . ' ' . escapeshellarg($forge) . ' ' . $command;
+                $forge = $this->app->getBasePath('forge');
+
+                // Escape every token individually — not just $php/$forge — so the
+                // command string can never break out of its shell-argument
+                // boundary even if it's ever built from something other than a
+                // literal string in a module's boot().
+                $tokens = preg_split('/\s+/', trim($command)) ?: [];
+                $escapedCommand = implode(' ', array_map('escapeshellarg', $tokens));
+
+                $cmd = escapeshellarg($php) . ' ' . escapeshellarg($forge) . ' ' . $escapedCommand;
                 exec($cmd, $out, $code);
                 if ($code !== 0) {
                     throw new \RuntimeException("Scheduled command '{$command}' exited with code {$code}: " . implode("\n", $out));
@@ -82,8 +97,8 @@ class Schedule
             }
 
             try {
-                $event->run();
-                $results[] = ['event' => $event->description(), 'status' => 'ok'];
+                $ran = $event->run();
+                $results[] = ['event' => $event->description(), 'status' => $ran ? 'ok' : 'skipped (overlapping)'];
             } catch (\Throwable $e) {
                 $results[] = ['event' => $event->description(), 'status' => 'error: ' . $e->getMessage()];
             }

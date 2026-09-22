@@ -17,15 +17,18 @@ class TinkerCommand extends Command
     protected string $signature   = 'tinker';
     protected string $description = 'Start an interactive PHP REPL with the application booted';
 
+    public function __construct(private readonly Application $app)
+    {
+        parent::__construct();
+    }
+
     protected function handle(): int
     {
-        $app = Application::getInstance();
-
         if (class_exists(\Psy\Shell::class)) {
-            return $this->runPsySh($app);
+            return $this->runPsySh($this->app);
         }
 
-        return $this->runFallbackRepl($app);
+        return $this->runFallbackRepl($this->app);
     }
 
     private function runPsySh(Application $app): int

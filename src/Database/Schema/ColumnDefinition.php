@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Ironflow\Database\Schema;
 
 /**
- * Fluent column definition for Blueprint.
+ * Fluent column definition for Table.
  */
 class ColumnDefinition
 {
     private array $options;
 
     public function __construct(
-        private readonly Blueprint $blueprint,
+        private readonly Table $table,
         public readonly string $name,
         public readonly string $type,
         array $options = []
@@ -46,13 +46,13 @@ class ColumnDefinition
 
     public function unique(): static
     {
-        $this->blueprint->unique($this->name);
+        $this->table->unique($this->name);
         return $this;
     }
 
     public function index(): static
     {
-        $this->blueprint->index($this->name);
+        $this->table->index($this->name);
         return $this;
     }
 

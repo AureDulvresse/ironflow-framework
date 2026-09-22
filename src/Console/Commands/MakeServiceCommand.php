@@ -6,6 +6,10 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new #[Injectable] service class and, when generated inside a
+ * module (`--module`), registers it in that module's `providers:`.
+ */
 class MakeServiceCommand extends Command
 {
     protected string $signature = 'make:service {name?} {--module=}';
@@ -13,8 +17,8 @@ class MakeServiceCommand extends Command
 
     protected function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Service name (e.g. PostService):');
-        $module = $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Service name (e.g. PostService):'));
+        $module = $this->moduleOption();
 
         if ($module) {
             $path = base_path("modules/{$module}/Services/{$name}.php");
@@ -43,6 +47,11 @@ class {$name}
 }
 PHP);
         $this->success("Service [{$name}] created.");
+
+        if ($module) {
+            $this->registerAsProvider($module, "{$ns}\\{$name}");
+        }
+
         return self::SUCCESS;
     }
 }

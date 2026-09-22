@@ -15,6 +15,7 @@ use Ironflow\Events\Dispatcher;
 use Ironflow\Exceptions\Handler as ExceptionHandler;
 use Ironflow\Http\Kernel as HttpKernel;
 use Ironflow\Http\Request;
+use Ironflow\Http\Shield\ShieldConfig;
 use Ironflow\Logging\Logger;
 use Ironflow\Module\ModuleManager;
 use Ironflow\Routing\Router;
@@ -150,9 +151,15 @@ class Application
         $this->container->instance(ConfigRepository::class, $this->config);
 
         // Load core config files immediately so all services can read them
-        foreach (['app', 'database', 'logging', 'session', 'cache', 'auth', 'middleware', 'filesystems', 'rbac', 'mail', 'queue', 'notifications', 'cors', 'services'] as $cfg) {
+        foreach (['app', 'database', 'logging', 'session', 'cache', 'auth', 'middleware', 'filesystems', 'rbac', 'mail', 'queue', 'notifications', 'cors', 'shield', 'services'] as $cfg) {
             $this->configure($cfg);
         }
+
+        // Shield — typed security config (headers, CSP, HSTS, CSRF exemptions).
+        // See src/Http/Shield/ShieldConfig.php.
+        $this->container->singleton(ShieldConfig::class, fn() => ShieldConfig::fromArray(
+            (array) $this->config->get('shield', [])
+        ));
 
         // Logger (Monolog-backed) — also bound as PSR-3 LoggerInterface
         $this->container->singleton(Logger::class, function () {
@@ -307,7 +314,7 @@ class Application
 
         // Task Scheduler — shared instance so modules can register events in boot()
         $this->container->singleton(\Ironflow\Scheduling\Schedule::class, fn() =>
-            new \Ironflow\Scheduling\Schedule($this->container->make(\Ironflow\Queue\QueueManager::class))
+            new \Ironflow\Scheduling\Schedule($this, $this->container->make(\Ironflow\Queue\QueueManager::class))
         );
 
         // Notification Manager

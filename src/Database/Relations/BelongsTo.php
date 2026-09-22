@@ -66,4 +66,19 @@ class BelongsTo extends Relation
             $model->setRelation($relation, $map[$fk] ?? null);
         }
     }
+
+    /**
+     * Overrides the base Relation::eagerLoadCount(), which would query
+     * $this->related's own table (the owner side) filtered by $foreignKey —
+     * a column that lives on the child table, not the owner table, so the
+     * inherited SQL references a nonexistent column. A "count" of a
+     * belongsTo is inherently 0 or 1 per model and needs no query: it's
+     * just whether the foreign key is set.
+     */
+    public function eagerLoadCount(Collection $models, string $countKey): void
+    {
+        foreach ($models as $model) {
+            $model->setRawAttribute($countKey, $model->{$this->foreignKey} !== null ? 1 : 0);
+        }
+    }
 }

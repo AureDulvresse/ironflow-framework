@@ -14,16 +14,16 @@ class ForeignIdDefinition
     private ?string $onDelete = null;
 
     public function __construct(
-        private readonly Blueprint $blueprint,
+        private readonly Table $table,
         private readonly string $column,
         private readonly ColumnDefinition $colDef
     ) {
     }
 
-    public function constrained(string $table = null, string $column = 'id'): static
+    public function constrained(?string $onTable = null, string $column = 'id'): static
     {
         // Guess table from column name: user_id → users
-        $this->referencedTable = $table ?? rtrim(str_replace('_id', '', $this->column), '_') . 's';
+        $this->referencedTable = $onTable ?? rtrim(str_replace('_id', '', $this->column), '_') . 's';
         $this->referencedColumn = $column;
         return $this;
     }
@@ -49,7 +49,7 @@ class ForeignIdDefinition
     public function registerForeign(): void
     {
         if ($this->referencedTable) {
-            $this->blueprint->addForeign(
+            $this->table->addForeign(
                 $this->column,
                 $this->referencedTable,
                 $this->referencedColumn,

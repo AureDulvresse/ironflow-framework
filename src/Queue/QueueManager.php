@@ -74,10 +74,7 @@ class QueueManager
                 ['id' => $row['id']]
             );
 
-            $job = unserialize($row['payload']);
-            if (!$job instanceof \Ironflow\Queue\Job) {
-                throw new \RuntimeException('Invalid job payload for id ' . $row['id']);
-            }
+            $job = $this->unserializeJob((string) $row['payload'], (int) $row['id']);
 
             return new ReservedJob(
                 (int) $row['id'],
@@ -85,6 +82,35 @@ class QueueManager
                 (int) $row['attempts'] + 1
             );
         });
+    }
+
+    /**
+     * Unserializes a stored payload restricted to Job subclasses — blocks PHP
+     * object injection (arbitrary gadget-chain classes) even if the `jobs`
+     * table were ever reachable by something other than enqueue() (e.g. a
+     * separate SQL injection, or direct DB access). The class named in the
+     * payload is autoloaded explicitly first, since allowed_classes only
+     * recognizes classes already declared in this process — get_declared_classes()
+     * wouldn't otherwise include a Job subclass no code has referenced yet.
+     */
+    private function unserializeJob(string $payload, int $id): Job
+    {
+        if (preg_match('/^O:\d+:"([^"]+)"/', $payload, $m)) {
+            class_exists($m[1], true);
+        }
+
+        $allowedClasses = array_values(array_filter(
+            get_declared_classes(),
+            static fn (string $c): bool => $c === Job::class || is_subclass_of($c, Job::class)
+        ));
+
+        $job = unserialize($payload, ['allowed_classes' => $allowedClasses]);
+
+        if (!$job instanceof Job) {
+            throw new \RuntimeException('Invalid job payload for id ' . $id);
+        }
+
+        return $job;
     }
 
     /** Remove a completed job. */

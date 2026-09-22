@@ -6,6 +6,10 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new Model class, optionally alongside a matching migration
+ * (`--migration`) and/or factory (`--factory`).
+ */
 class MakeModelCommand extends Command
 {
     protected string $signature = 'make:model {name?} {--module=} {--migration} {--factory}';
@@ -13,8 +17,8 @@ class MakeModelCommand extends Command
 
     protected function handle(): int
     {
-        $name = $this->argumentOrAsk('name', 'Model name (e.g. Post):');
-        $module = $this->option('module');
+        $name = $this->validClassName($this->argumentOrAsk('name', 'Model name (e.g. Post):'));
+        $module = $this->moduleOption();
 
         if ($module) {
             $path = base_path("modules/{$module}/Models/{$name}.php");
@@ -22,8 +26,9 @@ class MakeModelCommand extends Command
         } else {
             $path = base_path("app/Models/{$name}.php");
             $ns = "App\\Models";
-            @mkdir(base_path('app/Models'), 0755, true);
         }
+
+        @mkdir(dirname($path), 0755, true);
 
         if (is_file($path)) {
             $this->error("Model [{$name}] already exists.");
@@ -78,13 +83,13 @@ declare(strict_types=1);
 
 use Ironflow\\Database\\Migrations\\Migration;
 use Ironflow\\Database\\Schema\\Schema;
-use Ironflow\\Database\\Schema\\Blueprint;
+use Ironflow\\Database\\Schema\\Table;
 
 class {$class} extends Migration
 {
     public function up(): void
     {
-        Schema::create('{$table}', function (Blueprint \$t) {
+        Schema::create('{$table}', function (Table \$t) {
             \$t->id();
             \$t->timestamps();
         });

@@ -6,6 +6,9 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new timestamped migration file.
+ */
 class MakeMigrationCommand extends Command
 {
     protected string $signature = 'make:migration {name?} {--module=}';
@@ -13,8 +16,12 @@ class MakeMigrationCommand extends Command
 
     protected function handle(): int
     {
-        $name = str_replace(' ', '_', strtolower($this->argumentOrAsk('name', 'Migration name (e.g. create_posts_table):')));
-        $module = $this->option('module');
+        $rawName = $this->argumentOrAsk('name', 'Migration name (e.g. create_posts_table):');
+        if (preg_match('#[\\\\/]|\.\.#', $rawName)) {
+            throw new \InvalidArgumentException("Invalid migration name [{$rawName}] — must not contain slashes or '..'.");
+        }
+        $name = str_replace(' ', '_', strtolower($rawName));
+        $module = $this->moduleOption();
         $stamp = date('Y_m_d_His');
         $file = "{$stamp}_{$name}.php";
 
@@ -34,13 +41,13 @@ declare(strict_types=1);
 
 use Ironflow\\Database\\Migrations\\Migration;
 use Ironflow\\Database\\Schema\\Schema;
-use Ironflow\\Database\\Schema\\Blueprint;
+use Ironflow\\Database\\Schema\\Table;
 
 class {$class} extends Migration
 {
     public function up(): void
     {
-        Schema::create('{$table}', function (Blueprint \$t) {
+        Schema::create('{$table}', function (Table \$t) {
             \$t->id();
             \$t->timestamps();
         });

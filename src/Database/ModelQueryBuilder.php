@@ -19,7 +19,8 @@ class ModelQueryBuilder extends QueryBuilder
     public function __construct(
         Connection $connection,
         string $table,
-        private readonly string $modelClass
+        private readonly string $modelClass,
+        private readonly array $withoutGlobalScopes = []
     ) {
         parent::__construct($connection, $table);
         $this->applyGlobalScopes();
@@ -98,7 +99,10 @@ class ModelQueryBuilder extends QueryBuilder
     private function applyGlobalScopes(): void
     {
         $scopes = ($this->modelClass)::getGlobalScopes();
-        foreach ($scopes as $scope) {
+        foreach ($scopes as $name => $scope) {
+            if (in_array($name, $this->withoutGlobalScopes, true)) {
+                continue;
+            }
             $scope($this);
         }
     }

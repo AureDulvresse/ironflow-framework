@@ -26,13 +26,6 @@ class JwtGuard implements GuardInterface
     ) {
     }
 
-    public function setRequest(Request $request): void
-    {
-        $this->request = $request;
-        $this->user = null;
-        $this->resolved = false;
-    }
-
     public function check(): bool
     {
         return $this->user() !== null;
@@ -51,8 +44,12 @@ class JwtGuard implements GuardInterface
             return null;
         }
 
+        // Resolved outside the try/catch below: a missing/misconfigured secret
+        // is a real deployment error and must surface as one, not be swallowed
+        // into "unauthenticated" alongside genuine token failures.
+        $secret = $this->secret();
+
         try {
-            $secret = $this->config['secret'] ?? $_ENV['JWT_SECRET'] ?? '';
             $decoded = JWT::decode($token, new Key($secret, 'HS256'));
 
             $table = $this->config['table'] ?? 'users';
@@ -88,17 +85,38 @@ class JwtGuard implements GuardInterface
 
     public function createToken(object $user, array $claims = []): string
     {
-        $secret = $this->config['secret'] ?? $_ENV['JWT_SECRET'] ?? '';
+        $secret = $this->secret();
         $ttl = (int) ($this->config['ttl'] ?? $_ENV['JWT_TTL'] ?? 3600);
         $now = time();
 
-        $payload = array_merge([
+        // Reserved claims are applied last so they can never be overridden by
+        // caller-supplied $claims (previously array_merge()'s argument order
+        // let $claims silently clobber sub/exp/iat/iss).
+        $payload = array_merge($claims, [
             'iss' => $_ENV['APP_URL'] ?? 'ironflow',
             'sub' => $user->id,
             'iat' => $now,
             'exp' => $now + $ttl,
-        ], $claims);
+        ]);
 
         return JWT::encode($payload, $secret, 'HS256');
+    }
+
+    /**
+     * @throws \RuntimeException if JWT_SECRET is not configured, or too short
+     *         for HS256 (which requires a 256-bit / 32-byte key — firebase/php-jwt
+     *         rejects anything shorter with a DomainException, which the catch
+     *         in user() would otherwise silently swallow into "unauthenticated").
+     */
+    private function secret(): string
+    {
+        $secret = $this->config['secret'] ?? $_ENV['JWT_SECRET'] ?? '';
+        if (strlen($secret) < 32) {
+            throw new \RuntimeException(
+                'JWT_SECRET is not set or too short (HS256 requires at least 32 bytes). '
+                . 'Generate one with: php forge jwt:secret'
+            );
+        }
+        return $secret;
     }
 }

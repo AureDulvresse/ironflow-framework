@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Ironflow\Http;
 
 use Ironflow\Application;
-use Ironflow\Routing\Router;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * HTTP Response wrapper with convenient static factories.
+ *
+ * Inside a Controller, prefer the injected instance helpers (`$this->view(...)`)
+ * — they use the Controller's own constructor-injected TemplateEngine. These
+ * static factories resolve services ambiently via Application::getInstance()
+ * and exist for contexts with no DI available at all (closures, CLI output).
  */
 class Response extends SymfonyResponse
 {

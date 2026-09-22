@@ -91,6 +91,12 @@ test('sum avg min max aggregates', function () {
     expect($q->max('age'))->toBe(35.0);
 });
 
+test('min/max on a non-numeric column are not corrupted by the float cast', function () {
+    $q = $this->connection->table('users');
+    expect($q->min('name'))->toBe('Alice');
+    expect($q->max('name'))->toBe('Carol');
+});
+
 test('toSql returns parameterised SQL', function () {
     [$sql, $bindings] = $this->connection->table('users')
         ->where('active', '=', 1)

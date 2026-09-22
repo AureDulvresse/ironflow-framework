@@ -8,9 +8,14 @@ use Ironflow\Console\Command;
 use Ironflow\Database\Connection;
 use Ironflow\Database\Migrations\Migrator;
 
+/**
+ * Runs all pending migrations. `--fresh` drops every table first
+ * (destructive — asks for confirmation unless `--force` is also passed);
+ * `--seed` runs seeders afterwards; `--rollback` rolls back instead.
+ */
 class MigrateCommand extends Command
 {
-    protected string $signature   = 'migrate {--path=} {--fresh} {--seed} {--rollback}';
+    protected string $signature   = 'migrate {--path=} {--fresh} {--seed} {--rollback} {--force}';
     protected string $description = 'Run pending database migrations';
 
     public function __construct(private readonly Connection $db)
@@ -37,8 +42,8 @@ class MigrateCommand extends Command
 
     private function runAll(Migrator $migrator): int
     {
-        if ($this->option('fresh')) {
-            $this->freshAll($migrator);
+        if ($this->option('fresh') && !$this->freshAll($migrator)) {
+            return self::SUCCESS;
         }
 
         $paths   = $this->resolveMigrationPaths();
@@ -121,12 +126,19 @@ class MigrateCommand extends Command
         return self::SUCCESS;
     }
 
-    private function freshAll(Migrator $migrator): void
+    /** @return bool True if the drop proceeded; false if the user declined confirmation. */
+    private function freshAll(Migrator $migrator): bool
     {
+        if (!$this->option('force') && !$this->confirm('This will drop all tables. Are you sure?', false)) {
+            return false;
+        }
+
         $this->warn('Dropping all tables and re-running all migrations...');
         foreach ($this->resolveMigrationPaths() as $path) {
             $migrator->fresh($path);
         }
+
+        return true;
     }
 
     /** @return string[] */

@@ -8,6 +8,9 @@ use Ironflow\Console\Command;
 use Ironflow\Database\Connection;
 use Ironflow\Database\Migrations\Migrator;
 
+/**
+ * Rolls back the most recently run batch of migrations.
+ */
 class MigrateRollbackCommand extends Command
 {
     protected string $signature = 'migrate:rollback {--path=}';

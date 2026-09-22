@@ -11,7 +11,7 @@ use Ironflow\Database\Connection;
  * Schema facade — create, alter, drop tables.
  *
  * Dialect support: SQLite · MySQL / MariaDB · PostgreSQL · generic fallback.
- * All SQL is generated from the Blueprint without going through Doctrine's DDL
+ * All SQL is generated from the Table definition without going through Doctrine's DDL
  * compiler, so every dialect quirk is handled explicitly here.
  */
 class Schema
@@ -20,16 +20,16 @@ class Schema
 
     public static function create(string $table, callable $callback): void
     {
-        $blueprint = new Blueprint($table);
-        $callback($blueprint);
-        self::buildTable($blueprint, false);
+        $definition = new Table($table);
+        $callback($definition);
+        self::buildTable($definition, false);
     }
 
     public static function table(string $table, callable $callback): void
     {
-        $blueprint = new Blueprint($table);
-        $callback($blueprint);
-        self::buildTable($blueprint, true);
+        $definition = new Table($table);
+        $callback($definition);
+        self::buildTable($definition, true);
     }
 
     public static function drop(string $table): void
@@ -79,25 +79,27 @@ class Schema
 
     // ── Table builder ────────────────────────────────────────────────
 
-    private static function buildTable(Blueprint $blueprint, bool $alter): void
+    private static function buildTable(Table $table, bool $alter): void
     {
+        $table->finalizeForeignIds();
+
         $conn      = self::connection();
         $platform  = $conn->getPlatform();
         $sm        = $conn->getSchemaManager();
-        $tableName = $blueprint->getTableName();
+        $tableName = $table->getTableName();
         $dialect   = self::dialect($platform);
         $q         = self::q($dialect);
 
         // ── ALTER: add / drop columns ─────────────────────────────────
         if ($alter && $sm->tablesExist([$tableName])) {
-            foreach ($blueprint->getColumns() as $col) {
+            foreach ($table->getColumns() as $col) {
                 if ($col instanceof ColumnDefinition) {
                     $conn->statement(
                         self::buildAddColumnSql($tableName, $col->name, $col->type, $col->getOptions(), $dialect)
                     );
                 }
             }
-            foreach ($blueprint->getDrops() as $dropCol) {
+            foreach ($table->getDrops() as $dropCol) {
                 $conn->statement("ALTER TABLE {$q}{$tableName}{$q} DROP COLUMN {$q}{$dropCol}{$q}");
             }
             return;
@@ -109,7 +111,7 @@ class Schema
         $extraSqls  = [];   // Statements executed after CREATE TABLE (indexes)
 
         // Columns
-        foreach ($blueprint->getColumns() as $col) {
+        foreach ($table->getColumns() as $col) {
             if (is_array($col)) {
                 // id() / bigIncrements() — auto-increment primary key
                 $autoInc = $col['options']['autoincrement'] ?? false;
@@ -141,7 +143,7 @@ class Schema
         }
 
         // Constraints and indices
-        foreach ($blueprint->getIndices() as $idx) {
+        foreach ($table->getIndices() as $idx) {
             $idxCols = implode(', ', array_map(fn($c) => "{$q}{$c}{$q}", $idx['columns']));
 
             if ($idx['type'] === 'primary') {
@@ -175,7 +177,7 @@ class Schema
         // and they cannot be added inline anyway when using the simple CREATE TABLE path.
         // PostgreSQL and MySQL support inline FOREIGN KEY.
         if ($dialect !== 'sqlite') {
-            foreach ($blueprint->getForeigns() as $fk) {
+            foreach ($table->getForeigns() as $fk) {
                 $fkSql = "FOREIGN KEY ({$q}{$fk['column']}{$q})"
                        . " REFERENCES {$q}{$fk['table']}{$q} ({$q}{$fk['ref_column']}{$q})";
                 if ($fk['on_delete']) {

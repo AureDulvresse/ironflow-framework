@@ -52,15 +52,16 @@ trait HasPermission
         return true;
     }
 
-    /** Delegate ability check to the Gate (covers policies + closures). */
+    /**
+     * Delegate ability check to the Gate (covers policies + closures).
+     * No try/catch: a Gate resolution failure is a real misconfiguration
+     * and must surface as one, not be indistinguishable from a legitimate
+     * permission denial (see FrameworkExtension::funcCan() for the same fix).
+     */
     public function can(string $ability, mixed $arguments = []): bool
     {
-        try {
-            $gate = Application::getInstance()->getContainer()->make(Gate::class);
-            return $gate->forUser($this)->allows($ability, $arguments);
-        } catch (\Throwable) {
-            return false;
-        }
+        $gate = Application::getInstance()->getContainer()->make(Gate::class);
+        return $gate->forUser($this)->allows($ability, $arguments);
     }
 
     public function cannot(string $ability, mixed $arguments = []): bool

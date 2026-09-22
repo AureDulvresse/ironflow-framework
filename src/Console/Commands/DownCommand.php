@@ -6,6 +6,11 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Writes storage/maintenance.flag containing a bypass secret; MaintenanceMode
+ * middleware then returns 503 for every request except one carrying that
+ * secret in a `maintenance_bypass` cookie.
+ */
 class DownCommand extends Command
 {
     protected string $signature   = 'down {--secret=}';

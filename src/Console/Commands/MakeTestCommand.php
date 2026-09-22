@@ -6,6 +6,10 @@ namespace Ironflow\Console\Commands;
 
 use Ironflow\Console\Command;
 
+/**
+ * Scaffolds a new Pest test file — a feature test by default, or a unit
+ * test with `--unit`.
+ */
 class MakeTestCommand extends Command
 {
     protected string $signature   = 'make:test {name?} {--unit : Create a unit test instead of a feature test} {--module=}';
@@ -13,9 +17,9 @@ class MakeTestCommand extends Command
 
     protected function handle(): int
     {
-        $name   = $this->argumentOrAsk('name', 'Test name (e.g. PostController):');
+        $name   = $this->validClassName($this->argumentOrAsk('name', 'Test name (e.g. PostController):'));
         $name   = str_ends_with($name, 'Test') ? $name : $name . 'Test';
-        $module = $this->option('module');
+        $module = $this->moduleOption();
         $unit   = (bool) $this->option('unit');
 
         $sub = $unit ? 'Unit' : 'Feature';

@@ -15,11 +15,10 @@ class ValidatorFactory
 {
     public function make(array $data, array $rules, array $messages = []): ValidatorInstance
     {
-        $db = null;
-        try {
-            $db = Application::getInstance()->getContainer()->make(Connection::class);
-        } catch (\Throwable) {
-        }
+        // No try/catch: a Connection resolution failure is a real misconfiguration.
+        // Swallowing it here used to make every `unique:`/`exists:` rule pass
+        // silently instead — a validation bypass, not just a style issue.
+        $db = Application::getInstance()->getContainer()->make(Connection::class);
 
         return new ValidatorInstance($data, $rules, $messages, $db);
     }

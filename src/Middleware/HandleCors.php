@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ironflow\Middleware;
 
+use Ironflow\Config\Repository as Config;
 use Ironflow\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -26,9 +27,9 @@ class HandleCors
 {
     private array $config;
 
-    public function __construct()
+    public function __construct(Config $config)
     {
-        $this->config = $this->loadConfig();
+        $this->config = $this->loadConfig($config);
     }
 
     public function handle(Request $request, callable $next): Response
@@ -119,7 +120,7 @@ class HandleCors
 
     // ── Config loading ────────────────────────────────────────────────
 
-    private function loadConfig(): array
+    private function loadConfig(Config $config): array
     {
         $defaults = [
             'allowed_origins'    => [($_ENV['CORS_ORIGINS'] ?? '*')],
@@ -130,14 +131,6 @@ class HandleCors
             'max_age'            => 86400,
         ];
 
-        try {
-            $config = \Ironflow\Application::getInstance()
-                ->getContainer()
-                ->make(\Ironflow\Config\Repository::class);
-            $cors = $config->get('cors', []);
-            return array_merge($defaults, $cors);
-        } catch (\Throwable) {
-            return $defaults;
-        }
+        return array_merge($defaults, (array) $config->get('cors', []));
     }
 }
