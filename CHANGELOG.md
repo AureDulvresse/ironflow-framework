@@ -8,6 +8,10 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Unreleased]
 
+### Added
+
+- **CI GitHub Actions** (`.github/workflows/ci.yml`) — exécute `composer test` (Pest) sur PHP 8.2/8.3/8.4 en matrice et `composer analyse` (PHPStan niveau 6, annotations inline sur les PR) à chaque push sur `main`/`develop` et sur chaque pull request. Jusqu'ici la suite de tests et l'analyse statique ne tournaient que si quelqu'un pensait à les lancer manuellement. Badge de statut ajouté au README.
+
 ## [2.0.0] - 2026-09-22
 
 ### Security
@@ -82,8 +86,7 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ### À venir
 
-- Cache — interface unifiée, drivers file / Redis
-- File d'attente de jobs (queue workers)
+- Internationalisation / traductions (`trans()`, fichiers de langue)
 - WebSockets / diffusion temps réel
 - Documentation complète avec recettes
 - Lint statique (`module:lint`) pour détecter les violations de frontière de module au niveau du code source
