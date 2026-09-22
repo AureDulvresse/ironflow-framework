@@ -1,19 +1,15 @@
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/ironflow-framework/framework/main/.github/assets/logo.svg" alt="IronFlow" width="72" />
-
 # `ironflow-framework/framework`
+
+![IronFlow](https://raw.githubusercontent.com/ironflow-framework/framework/main/.github/assets/logo.svg)
 
 **Le cœur d'IronFlow — conteneur DI, routeur, ORM, modules HMVC, CLI.**
 
 [![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
 [![License MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-6366f1?style=flat-square)]()
+[![Version](https://img.shields.io/badge/version-2.0.0-6366f1?style=flat-square)](https://github.com/ironflow-framework/framework/releases)
 [![Tests](https://img.shields.io/badge/tests-passing-22c55e?style=flat-square&logo=github-actions&logoColor=white)](https://github.com/ironflow-framework/framework/actions)
 
 [Installation](#installation) · [Architecture modulaire](#architecture-modulaire) · [Injection de dépendances](#injection-de-dépendances) · [Routing](#routing) · [ORM](#orm) · [CLI](#cli-forge) · [Contribuer](#contribuer)
-
-</div>
 
 ---
 
@@ -99,13 +95,13 @@ class PostService
 
 ### Ce que supporte le conteneur
 
-| Fonctionnalité | Exemple |
-|---|---|
-| Auto-résolution par type hint | `PostRepository $posts` |
-| Injection de scalaires nommés | `#[Inject('config.mail.from')]` |
-| Injection dans les méthodes de contrôleurs | `public function show(Post $post, Request $request)` |
-| Singletons et liaisons explicites | `$container->bind(MailerInterface::class, SmtpMailer::class)` |
-| Providers de module | définis dans `providers: [...]` de `#[Module]` |
+| Fonctionnalité                             | Exemple                                                       |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| Auto-résolution par type hint              | `PostRepository $posts`                                       |
+| Injection de scalaires nommés              | `#[Inject('config.mail.from')]`                               |
+| Injection dans les méthodes de contrôleurs | `public function show(Post $post, Request $request)`          |
+| Singletons et liaisons explicites          | `$container->bind(MailerInterface::class, SmtpMailer::class)` |
+| Providers de module                        | définis dans `providers: [...]` de `#[Module]`                |
 
 ### Liaison manuelle
 
@@ -222,12 +218,12 @@ public function scopePublished(QueryBuilder $query): QueryBuilder
 
 ### Relations supportées
 
-| Relation | Méthode |
-|---|---|
-| Un-à-plusieurs | `hasMany(Comment::class)` |
+| Relation                         | Méthode                                          |
+| -------------------------------- | ------------------------------------------------ |
+| Un-à-plusieurs                   | `hasMany(Comment::class)`                        |
 | Plusieurs-à-plusieurs avec pivot | `belongsToMany(Tag::class)->withPivot('weight')` |
-| À travers | `hasManyThrough(Comment::class, Post::class)` |
-| Inverse | `belongsTo(User::class)` |
+| À travers                        | `hasManyThrough(Comment::class, Post::class)`    |
+| Inverse                          | `belongsTo(User::class)`                         |
 
 ### Migrations
 
@@ -373,13 +369,13 @@ Namespaces par module :
 
 ### Fonctions et filtres disponibles
 
-| Catégorie | Exemples |
-|---|---|
-| Routing | `route('name', params)`, `current_route()` |
-| Assets | `asset('app.css')` — cache-busting automatique |
-| Formulaires | `csrf_field()`, `old('field')`, `errors('field')` |
-| Filtres | `time_ago`, `markdown`, `slug`, `money`, `truncate` |
-| Auth | `auth_user()`, `is_auth()` |
+| Catégorie   | Exemples                                            |
+| ----------- | --------------------------------------------------- |
+| Routing     | `route('name', params)`, `current_route()`          |
+| Assets      | `asset('app.css')` — cache-busting automatique      |
+| Formulaires | `csrf_field()`, `old('field')`, `errors('field')`   |
+| Filtres     | `time_ago`, `markdown`, `slug`, `money`, `truncate` |
+| Auth        | `auth_user()`, `is_auth()`                          |
 
 ---
 
@@ -421,15 +417,15 @@ class SeedBlogCommand extends BaseCommand
 
 ## Ce qui est sur étagère vs fait maison
 
-| Délégué à  | Construit par IronFlow  |
-|---|---|
-| `symfony/http-foundation` — HTTP bas niveau | Conteneur DI avec attributs PHP 8 |
-| `symfony/console` — fondation CLI | Système de modules + graphe de dépendances |
-| `twig/twig` — moteur de templates | Routeur fluide avec route naming |
-| `doctrine/dbal` — couche SQL | ORM Active Record, migrations, factories |
-| `monolog/monolog` — logging | Middlewares, bus d'événements |
-| `firebase/php-jwt` — tokens JWT | Extension Twig, scaffolding CLI complet |
-| `vlucas/phpdotenv` — variables d'env | Auth session + JWT, validation, CSRF |
+| Délégué à                                   | Construit par IronFlow                     |
+| ------------------------------------------- | ------------------------------------------ |
+| `symfony/http-foundation` — HTTP bas niveau | Conteneur DI avec attributs PHP 8          |
+| `symfony/console` — fondation CLI           | Système de modules + graphe de dépendances |
+| `twig/twig` — moteur de templates           | Routeur fluide avec route naming           |
+| `doctrine/dbal` — couche SQL                | ORM Active Record, migrations, factories   |
+| `monolog/monolog` — logging                 | Middlewares, bus d'événements              |
+| `firebase/php-jwt` — tokens JWT             | Extension Twig, scaffolding CLI complet    |
+| `vlucas/phpdotenv` — variables d'env        | Auth session + JWT, validation, CSRF       |
 
 Chaque composant externe est **wrappé derrière nos propres interfaces** dans `Ironflow\Ironflow\`. Ton code n'importe jamais `Symfony\Component\HttpFoundation\Request` — seulement `Ironflow\Ironflow\Http\Request`.
 
@@ -488,9 +484,5 @@ vendor/bin/phpunit --coverage-html coverage/
 
 ---
 
-<div align="center">
-
-*Chaque framework est une théorie du bon code.*  
-*IronFlow parie sur la modularité explicite, les attributs PHP 8, et le respect de tes conventions à toi.*
-
-</div>
+_Chaque framework est une théorie du bon code._
+_IronFlow parie sur la modularité explicite, les attributs PHP 8, et le respect de tes conventions à toi._
