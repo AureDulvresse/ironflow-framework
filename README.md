@@ -7,7 +7,7 @@ The technical core of IronFlow: dependency container, HMVC modules, HTTP routing
 [![CI](https://img.shields.io/github/actions/workflow/status/ironflow-framework/framework/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/ironflow-framework/framework/actions/workflows/ci.yml)
 [![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
 [![License MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0-6366f1?style=flat-square)](https://github.com/ironflow-framework/framework/releases)
+[![Version](https://img.shields.io/badge/version-2.2.0-6366f1?style=flat-square)](https://github.com/ironflow-framework/framework/releases)
 
 This repository contains the framework core. It is not a ready-to-use application project: for starting an application, it is recommended to use the associated skeleton repository.
 
@@ -23,6 +23,8 @@ This repository contains the framework core. It is not a ready-to-use applicatio
 - [ORM and database](#orm-and-database)
 - [Security and middleware](#security-and-middleware)
 - [CLI](#cli)
+- [Health checks](#health-checks)
+- [Package ecosystem](#package-ecosystem)
 - [Repository structure](#repository-structure)
 - [Testing and quality](#testing-and-quality)
 - [Contributing](#contributing)
@@ -40,7 +42,8 @@ IronFlow is a PHP 8.2+ framework designed for modular, scalable, and testable ap
 - lightweight ORM based on models, relationships, and migrations;
 - authentication and authorization system;
 - Twig template engine;
-- event handling, jobs, queue workers, and scheduling.
+- event handling, jobs, queue workers, and scheduling;
+- pluggable health checks (database, cache, disk, queue) aggregated into a single `/health` report.
 
 The framework follows a modern architectural direction: clear separation of concerns, explicit dependencies, isolated modules, and service injection instead of global resolution.
 
@@ -204,6 +207,15 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth']], function () use
 
 Routing also relies on the container to instantiate controllers and inject the required dependencies.
 
+`Route` also exposes two chainable shortcuts for the two most common middleware cases:
+
+```php
+$router->get('/dashboard', [DashboardController::class, 'index'])->auth();
+$router->post('/login', [AuthController::class, 'login'])->throttle(5, 1); // 5 attempts / minute
+```
+
+A module doesn't have to live under the application's local `modules/` directory either — see [Package ecosystem](#package-ecosystem).
+
 ---
 
 ## ORM and database
@@ -274,6 +286,46 @@ php forge migrate --fresh --seed
 ```
 
 The command system is extensible and can also register module-specific commands.
+
+---
+
+## Health checks
+
+`Health\HealthManager` aggregates pluggable probes (database, cache, disk space, queue backlog) into one report, meant to be exposed behind a `/health` route for load balancers, uptime monitors, or container orchestrators:
+
+```json
+{
+  "status": "ok",
+  "checks": {
+    "database": {"status": "ok", "message": "OK", "duration_ms": 1.2},
+    "queue": {"status": "ok", "message": "OK", "duration_ms": 0.4}
+  },
+  "duration_ms": 4.21
+}
+```
+
+Thresholds are configured per check in `config/health.php`. Writing a custom check is a two-method interface (`name()`, `run(): HealthResult`) — see the full guide in `docs/health.md`.
+
+---
+
+## Package ecosystem
+
+A module isn't limited to the application's local `modules/` directory: `BaseModule::path()` resolves `Views/`, `routes.php`, and migrations by reflecting on the module class's own file location, so a module ships just as well from `vendor/`. Installing a package that declares its module in its own `composer.json` (`extra.ironflow.modules`) is enough on its own — `PackageDiscovery` picks it up automatically at boot, no edit to `config/modules.php` required.
+
+Official companion packages built on this mechanism, each an independent, self-documented Composer package (own `README.md`/`LICENSE`, installable on its own):
+
+| Package | Purpose |
+|---|---|
+| [`ironflow-framework/form-builder`](https://github.com/ironflow-framework/form-builder) | Django-style declarative forms — define fields on the backend, render and validate them without duplicating rules on the frontend |
+| [`ironflow-framework/anvil`](https://github.com/ironflow-framework/anvil) | Local Docker Compose development environment (Sail's role, under its own name) |
+| [`ironflow-framework/compass`](https://github.com/ironflow-framework/compass) | Generates `AGENTS.md` — a live map of routes/modules/config for AI coding agents and new contributors |
+
+```bash
+composer require ironflow-framework/form-builder
+composer require --dev ironflow-framework/anvil ironflow-framework/compass
+```
+
+See [Modules (HMVC)](docs/modules.md#distributing-a-module-as-a-package) for how the discovery mechanism itself works, if you want to ship your own.
 
 ---
 

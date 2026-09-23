@@ -127,6 +127,21 @@ $router->get('/hello/{name}', function (\Ironflow\Http\Request $request, string 
 Or add a controller method — see [Routing](routing.md) and
 [Requests & Responses](http.md).
 
+## Companion packages
+
+Beyond the framework core, a few official packages extend it — each one an
+independent, self-documented Composer package, not something bundled in:
+
+```bash
+composer require ironflow-framework/form-builder        # Django-style backend forms
+composer require --dev ironflow-framework/anvil          # Docker Compose dev environment
+composer require --dev ironflow-framework/compass         # generates AGENTS.md for AI coding agents
+```
+
+All three register themselves automatically on install (auto-discovery — see
+[Modules (HMVC)](modules.md#distributing-a-module-as-a-package)), no manual
+`config/modules.php` edit needed.
+
 ## Where to go next
 
 - [Architecture & Request Lifecycle](architecture.md) — how a request actually flows through the framework
