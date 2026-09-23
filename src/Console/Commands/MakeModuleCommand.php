@@ -102,6 +102,12 @@ PHP;
         return <<<PHP
 <?php
 
+/**
+ * Loaded by BaseModule::loadRoutes() with \$router already in scope.
+ *
+ * @var \Ironflow\Routing\Router \$router
+ */
+
 use Modules\\{$name}\\Controllers\\{$name}Controller;
 
 \$router->get('/{$lower}', [{$name}Controller::class, 'index'])->name('{$lower}.index');

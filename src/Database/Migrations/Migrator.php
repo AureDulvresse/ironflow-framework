@@ -117,16 +117,48 @@ class Migrator
         return $status;
     }
 
+    /**
+     * Drops every table (used by `migrate --fresh`/`migrate:fresh`).
+     *
+     * `listTableNames()` has no notion of foreign-key dependency order, so
+     * reversing it is not a reliable drop order — on MySQL/PostgreSQL,
+     * where Schema::buildTable() emits real FOREIGN KEY constraints (unlike
+     * SQLite, which ignores them), dropping a referenced table before its
+     * referencing table fails outright. FK enforcement is disabled for the
+     * duration of this call on both dialects instead of trying to compute a
+     * safe order.
+     */
     public function dropAll(): void
     {
-        $sm     = $this->db->getSchemaManager();
-        $tables = $sm->listTableNames();
-        foreach (array_reverse($tables) as $table) {
-            if ($table === 'migrations') {
-                continue;
-            }
-            Schema::drop($table);
+        $sm       = $this->db->getSchemaManager();
+        $tables   = $sm->listTableNames();
+        $platform = strtolower(class_basename(get_class($this->db->getPlatform())));
+        $isMysql  = str_contains($platform, 'mysql') || str_contains($platform, 'maria');
+        $isPgsql  = str_contains($platform, 'postgre') || str_contains($platform, 'pgsql');
+
+        if ($isMysql) {
+            $this->db->statement('SET FOREIGN_KEY_CHECKS = 0');
         }
+
+        try {
+            foreach (array_reverse($tables) as $table) {
+                if ($table === 'migrations') {
+                    continue;
+                }
+                if ($isPgsql) {
+                    // No MySQL-style session-wide FK-disable exists for
+                    // Postgres; CASCADE drops dependent constraints instead.
+                    $this->db->statement('DROP TABLE IF EXISTS "' . $table . '" CASCADE');
+                } else {
+                    Schema::drop($table);
+                }
+            }
+        } finally {
+            if ($isMysql) {
+                $this->db->statement('SET FOREIGN_KEY_CHECKS = 1');
+            }
+        }
+
         $this->db->statement('DELETE FROM migrations');
     }
 
@@ -137,12 +169,25 @@ class Migrator
     }
 
     /**
-     * Discover all migration directories under a base path.
-     * Checks: {base}/database/migrations, {base}/modules/*\/Database/Migrations, {base}/modules/*\/Migrations
+     * Discover all migration directories under a base path, plus any
+     * explicitly given module classes'.
      *
+     * The glob-based scan covers the conventional local layout:
+     * {base}/database/migrations, {base}/modules/*\/Database/Migrations,
+     * {base}/modules/*\/Migrations.
+     *
+     * $moduleClasses additionally resolves each class's own directory via
+     * reflection (see BaseModule::path()) — this is what makes a module
+     * shipped inside a vendor/ Composer package discoverable too, since its
+     * directory isn't under {base}/modules/ at all and the glob above would
+     * never find it. Pass `array_keys($moduleManager->getModulePaths())`,
+     * or just `config('modules.enabled', [])`; both work identically since
+     * only the class's file location is used, never its registration state.
+     *
+     * @param string[] $moduleClasses
      * @return string[]
      */
-    public static function discoverPaths(string $basePath): array
+    public static function discoverPaths(string $basePath, array $moduleClasses = []): array
     {
         $paths = [];
 
@@ -158,6 +203,23 @@ class Migrator
                     if (!in_array($dir, $paths, true)) {
                         $paths[] = $dir;
                     }
+                }
+            }
+        }
+
+        foreach ($moduleClasses as $class) {
+            if (!is_string($class) || !class_exists($class)) {
+                continue;
+            }
+            try {
+                $dir = dirname((new \ReflectionClass($class))->getFileName());
+            } catch (\Throwable) {
+                continue;
+            }
+            foreach (['/Database/Migrations', '/Migrations'] as $suffix) {
+                $p = rtrim($dir, '/\\') . $suffix;
+                if (is_dir($p) && !in_array($p, $paths, true)) {
+                    $paths[] = $p;
                 }
             }
         }

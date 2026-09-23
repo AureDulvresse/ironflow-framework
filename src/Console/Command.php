@@ -362,6 +362,13 @@ abstract class Command extends SymfonyCommand
         $description = '';
         if (str_contains($token, ':')) {
             [$token, $description] = explode(':', $token, 2);
+            // A signature like "{name? : description}" leaves a trailing
+            // space on $token ("name? ") after the split above — without
+            // trimming it, str_ends_with($token, '?') below is false, the
+            // argument is wrongly registered as REQUIRED, and its name
+            // literally includes the '?' character (since trim($token) at
+            // the end only strips whitespace, not the marker).
+            $token = rtrim($token);
         }
 
         $mode    = InputArgument::REQUIRED;
@@ -383,6 +390,12 @@ abstract class Command extends SymfonyCommand
         $description = '';
         if (str_contains($token, ':')) {
             [$token, $description] = explode(':', $token, 2);
+            // Same trailing-space issue as parseArgument(): "{--module= :
+            // description}" leaves $token as "module= " after the split,
+            // so str_ends_with($token, '=') below is false and the option
+            // falls through to being treated as having a literal default
+            // value of " " (a single space) instead of no value at all.
+            $token = rtrim($token);
         }
 
         $mode    = InputOption::VALUE_NONE;

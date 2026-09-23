@@ -127,10 +127,30 @@ class Application
 
         $this->booted = true;
 
+        // config/modules.php isn't in bindCoreServices()'s core-config list
+        // (loaded eagerly for every app regardless of whether modules are
+        // used yet), so it must be loaded explicitly here before its
+        // 'modules.enabled' key can be read.
+        $this->configure('modules');
+
         /** @var ModuleManager $manager */
         $manager = $this->container->make(ModuleManager::class);
 
-        $moduleClasses = $this->config->get('modules.enabled', []);
+        // Modules come from two sources: explicitly listed in
+        // config/modules.php ('enabled'), and auto-discovered from any
+        // installed Composer package that declares itself via
+        // extra.ironflow.modules in its own composer.json (see
+        // PackageDiscovery). 'disabled' lets an app opt a discovered module
+        // out without uninstalling the package.
+        $configured = (array) $this->config->get('modules.enabled', []);
+        $discovered = \Ironflow\Module\PackageDiscovery::discover($this->basePath);
+        $disabled   = (array) $this->config->get('modules.disabled', []);
+
+        $moduleClasses = array_values(array_diff(
+            array_unique(array_merge($configured, $discovered)),
+            $disabled
+        ));
+
         foreach ($moduleClasses as $moduleClass) {
             $manager->register($moduleClass);
         }
@@ -151,7 +171,7 @@ class Application
         $this->container->instance(ConfigRepository::class, $this->config);
 
         // Load core config files immediately so all services can read them
-        foreach (['app', 'database', 'logging', 'session', 'cache', 'auth', 'middleware', 'filesystems', 'rbac', 'mail', 'queue', 'notifications', 'cors', 'shield', 'services'] as $cfg) {
+        foreach (['app', 'database', 'logging', 'session', 'cache', 'auth', 'middleware', 'filesystems', 'rbac', 'mail', 'queue', 'notifications', 'cors', 'shield', 'services', 'health'] as $cfg) {
             $this->configure($cfg);
         }
 
@@ -197,7 +217,7 @@ class Application
 
         // Module Manager
         $this->container->singleton(ModuleManager::class, function () {
-            return new ModuleManager($this->container, $this->path('modules'));
+            return new ModuleManager($this->container);
         });
 
         // HTTP Kernel
@@ -326,18 +346,45 @@ class Application
             )
         );
 
-        // Health Manager — register default checks (DB, cache, disk)
+        // Health Manager — register default checks (DB, cache, disk, queue).
+        // Thresholds and which checks are enabled come from config/health.php
+        // so ops can tune them without touching framework code.
         $this->container->singleton(\Ironflow\Health\HealthManager::class, function () {
             $manager = new \Ironflow\Health\HealthManager();
-            $manager->register(new \Ironflow\Health\Checks\DatabaseHealthCheck(
-                $this->container->make(Connection::class)
-            ));
-            $manager->register(new \Ironflow\Health\Checks\CacheHealthCheck(
-                $this->container->make(CacheManager::class)
-            ));
-            $manager->register(new \Ironflow\Health\Checks\DiskSpaceHealthCheck(
-                $this->path('storage')
-            ));
+            $enabled = (array) $this->config->get('health.enabled', ['database', 'cache', 'disk', 'queue']);
+
+            if (in_array('database', $enabled, true)) {
+                $manager->register(new \Ironflow\Health\Checks\DatabaseHealthCheck(
+                    $this->container->make(Connection::class)
+                ));
+            }
+
+            if (in_array('cache', $enabled, true)) {
+                $manager->register(new \Ironflow\Health\Checks\CacheHealthCheck(
+                    $this->container->make(CacheManager::class)
+                ));
+            }
+
+            if (in_array('disk', $enabled, true)) {
+                $manager->register(new \Ironflow\Health\Checks\DiskSpaceHealthCheck(
+                    $this->path('storage'),
+                    (float) $this->config->get('health.disk.warn_percent', 85.0),
+                    (float) $this->config->get('health.disk.fail_percent', 95.0)
+                ));
+            }
+
+            if (in_array('queue', $enabled, true)) {
+                $manager->register(new \Ironflow\Health\Checks\QueueHealthCheck(
+                    $this->container->make(Connection::class),
+                    (string) $this->config->get('queue.table', 'jobs'),
+                    (string) $this->config->get('queue.failed_table', 'failed_jobs'),
+                    (int) $this->config->get('health.queue.backlog_warn', 100),
+                    (int) $this->config->get('health.queue.backlog_fail', 1000),
+                    (int) $this->config->get('health.queue.failed_warn', 1),
+                    (int) $this->config->get('health.queue.failed_fail', 50)
+                ));
+            }
+
             return $manager;
         });
     }

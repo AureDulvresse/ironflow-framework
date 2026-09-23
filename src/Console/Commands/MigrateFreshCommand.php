@@ -11,11 +11,12 @@ use Ironflow\Database\Migrations\Migrator;
 /**
  * Drops every table and re-runs all migrations from scratch, optionally
  * seeding afterwards (`--seed`). Destructive — asks for confirmation
- * before proceeding.
+ * before proceeding, unless `--force` is given (required for non-interactive
+ * use — CI, deploy scripts — same convention as `migrate --fresh --force`).
  */
 class MigrateFreshCommand extends Command
 {
-    protected string $signature = 'migrate:fresh {--seed}';
+    protected string $signature = 'migrate:fresh {--seed} {--force}';
     protected string $description = 'Drop all tables and re-run all migrations';
 
     public function __construct(private readonly Connection $db)
@@ -25,12 +26,12 @@ class MigrateFreshCommand extends Command
 
     protected function handle(): int
     {
-        if (!$this->confirm('This will drop all tables. Are you sure?', false)) {
+        if (!$this->option('force') && !$this->confirm('This will drop all tables. Are you sure?', false)) {
             return self::SUCCESS;
         }
 
         $migrator = new Migrator($this->db);
-        $paths    = Migrator::discoverPaths(base_path());
+        $paths    = Migrator::discoverPaths(base_path(), (array) config('modules.enabled', []));
 
         $migrator->dropAll();
 

@@ -27,7 +27,7 @@ class MigrateRollbackCommand extends Command
         $explicitPath = $this->option('path');
         $paths      = $explicitPath !== null && is_dir((string) $explicitPath)
             ? [(string) $explicitPath]
-            : Migrator::discoverPaths(base_path());
+            : Migrator::discoverPaths(base_path(), (array) config('modules.enabled', []));
 
         $rolledBack = [];
         foreach ($paths as $p) {

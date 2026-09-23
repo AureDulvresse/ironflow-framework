@@ -144,6 +144,6 @@ class MigrateCommand extends Command
     /** @return string[] */
     private function resolveMigrationPaths(): array
     {
-        return Migrator::discoverPaths(base_path());
+        return Migrator::discoverPaths(base_path(), (array) config('modules.enabled', []));
     }
 }
