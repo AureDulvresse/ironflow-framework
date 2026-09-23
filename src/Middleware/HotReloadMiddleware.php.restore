@@ -10,17 +10,20 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * HotReloadMiddleware — auto-refresh HTML pages during local development.
+ * Auto-refreshes the browser during local development, for a project that
+ * isn't running the Vite dev server at all (a pure API backend, or the
+ * frontend pipeline isn't installed).
  *
- * How it works:
- *   1. Intercepts GET /__ironflow/ping — returns JSON with an mtime hash.
- *   2. Injects a tiny polling script into every HTML response.
- *   3. The script compares hashes; when the hash changes it reloads the page.
+ * Polls GET /__ironflow/ping every 800ms for an mtime hash over watched
+ * source files, injected into every HTML response; the browser reloads
+ * when the hash changes. Steps aside entirely (no ping, no injected
+ * script) once Vite's dev server is running (public/hot present) — Vite's
+ * own `refresh` option (vite.config.js) already covers PHP source and
+ * templates over its WebSocket, faster and without polling, so running
+ * both would only risk a stale reload landing on top of a change Vite
+ * already applied instantly.
  *
- * Enabled only when APP_ENV=local (or APP_DEBUG=true).
- * Never active in production.
- *
- * File types watched: .php, .twig, .html, .css, .js (excludes vendor & cache).
+ * Enabled only when APP_ENV=local or APP_DEBUG=true; never in production.
  */
 class HotReloadMiddleware
 {
@@ -32,11 +35,10 @@ class HotReloadMiddleware
 
     public function handle(Request $request, callable $next): Response
     {
-        if (!$this->isDevMode()) {
+        if (!$this->isDevMode() || $this->viteDevServerRunning()) {
             return $next($request);
         }
 
-        // Serve the hash check endpoint
         if ($request->getPathInfo() === self::PING_PATH) {
             return $this->pingResponse();
         }
@@ -44,7 +46,6 @@ class HotReloadMiddleware
         /** @var Response $response */
         $response = $next($request);
 
-        // Inject script only into HTML responses
         $ct = (string) $response->headers->get('Content-Type', '');
         if (str_contains($ct, 'text/html') || $ct === '') {
             $body = $response->getContent();
@@ -58,8 +59,6 @@ class HotReloadMiddleware
         return $response;
     }
 
-    // ── Ping endpoint ─────────────────────────────────────────────────
-
     private function pingResponse(): JsonResponse
     {
         $response = new JsonResponse(['hash' => $this->computeHash()]);
@@ -67,10 +66,7 @@ class HotReloadMiddleware
         return $response;
     }
 
-    /**
-     * Compute an mtime hash over watched source files.
-     * Fast enough for 800 ms polling; scans up to ~10k files in <5ms.
-     */
+    /** Fast enough for 800ms polling; scans up to ~10k files in <5ms. */
     private function computeHash(): string
     {
         $basePath = $this->app->getBasePath();
@@ -109,7 +105,7 @@ class HotReloadMiddleware
             }
         }
 
-        // Also watch framework src when running from the monorepo
+        // Also watch framework src when running from the monorepo.
         $frameworkSrc = $basePath . '/../framework/src';
         if (is_dir($frameworkSrc)) {
             $iterator = new \RecursiveIteratorIterator(
@@ -129,8 +125,6 @@ class HotReloadMiddleware
 
         return md5("{$maxMtime}:{$fileCount}");
     }
-
-    // ── Script injection ──────────────────────────────────────────────
 
     private function injectScript(): string
     {
@@ -155,12 +149,16 @@ class HotReloadMiddleware
 HTML;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────
-
     private function isDevMode(): bool
     {
         $env   = strtolower((string) ($_ENV['APP_ENV'] ?? 'production'));
         $debug = filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOLEAN);
         return $env === 'local' || $debug;
+    }
+
+    /** Same signal Template\FrameworkExtension::funcViteDevMode() uses. */
+    private function viteDevServerRunning(): bool
+    {
+        return is_file($this->app->path('public', 'hot'));
     }
 }
