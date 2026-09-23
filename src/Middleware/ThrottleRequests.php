@@ -27,9 +27,15 @@ class ThrottleRequests
     {
     }
 
-    public function handle(Request $request, callable $next, int $maxAttempts = 60, int $decayMinutes = 1): Response
+    /**
+     * $maxAttempts/$decayMinutes are string|int, not int: colon-parameters
+     * from the middleware pipeline always arrive as strings, never cast.
+     */
+    public function handle(Request $request, callable $next, string|int $maxAttempts = 60, string|int $decayMinutes = 1): Response
     {
         $limiter = $this->limiter;
+        $maxAttempts = (int) $maxAttempts;
+        $decayMinutes = (int) $decayMinutes;
 
         $key = $this->resolveKey($request);
         $decaySeconds = $decayMinutes * 60;
@@ -37,7 +43,6 @@ class ThrottleRequests
         if ($limiter->tooManyAttempts($key, $maxAttempts, $decaySeconds)) {
             $retryAfter = $limiter->availableIn($key, $maxAttempts, $decaySeconds);
             $e = new HttpException(429, 'Too Many Requests.');
-            // Surface Retry-After via the exception's headers if supported.
             throw $e->withHeaders([
                 'Retry-After'           => (string) $retryAfter,
                 'X-RateLimit-Limit'     => (string) $maxAttempts,

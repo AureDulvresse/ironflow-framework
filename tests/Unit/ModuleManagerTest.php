@@ -17,7 +17,7 @@ use Ironflow\Tests\Unit\Fixtures\GammaModule;
 
 function makeManager(): ModuleManager
 {
-    return new ModuleManager(new Container(), sys_get_temp_dir());
+    return new ModuleManager(new Container());
 }
 
 test('register and boot single module', function () {

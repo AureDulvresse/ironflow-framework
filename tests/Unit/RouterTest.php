@@ -110,3 +110,34 @@ test('getCurrentRoute reflects the most recently dispatched route', function () 
     expect($this->router->getCurrentRoute())->not->toBeNull();
     expect($this->router->getCurrentRoute()->getName())->toBe('ping');
 });
+
+test('auth() defaults to the "auth" alias for the session guard', function () {
+    $route = (new Route('GET', '/dashboard', fn () => null))->auth();
+    expect($route->getMiddlewares())->toBe(['auth']);
+});
+
+test('auth() with an explicit guard produces "auth:guard"', function () {
+    $route = (new Route('GET', '/api/me', fn () => null))->auth('jwt');
+    expect($route->getMiddlewares())->toBe(['auth:jwt']);
+});
+
+test('throttle() defaults to 60 attempts per minute', function () {
+    $route = (new Route('POST', '/login', fn () => null))->throttle();
+    expect($route->getMiddlewares())->toBe(['throttle:60,1']);
+});
+
+test('throttle() with explicit values', function () {
+    $route = (new Route('POST', '/login', fn () => null))->throttle(5, 1);
+    expect($route->getMiddlewares())->toBe(['throttle:5,1']);
+});
+
+test('auth(), throttle() and middleware() all chain onto the same route', function () {
+    $route = (new Route('POST', '/login', fn () => null))
+        ->name('login')
+        ->auth('jwt')
+        ->throttle(5, 1)
+        ->middleware('sanitize');
+
+    expect($route->getName())->toBe('login');
+    expect($route->getMiddlewares())->toBe(['auth:jwt', 'throttle:5,1', 'sanitize']);
+});

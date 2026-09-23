@@ -31,13 +31,20 @@ class HealthManager
         $overall = HealthResult::OK;
 
         foreach ($this->checks as $name => $check) {
+            $checkStart = microtime(true);
             try {
                 $result = $check->run();
             } catch (\Throwable $e) {
                 $result = HealthResult::fail('Check threw: ' . $e->getMessage());
             }
 
-            $results[$name] = $result->toArray();
+            // Measured here, centrally, rather than by each check — every
+            // check (including third-party ones that don't self-time) gets
+            // per-check timing for free, useful to tell "the report is slow"
+            // apart from "this one probe is slow".
+            $results[$name] = $result->toArray() + [
+                'duration_ms' => round((microtime(true) - $checkStart) * 1000, 2),
+            ];
             $overall = $this->worst($overall, $result->status);
         }
 

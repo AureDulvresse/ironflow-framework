@@ -10,14 +10,33 @@ Les versions `0.1.x`/`0.2.0` (juin 2026) correspondent à la phase de prototypag
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-23
+
 ### Added
 
 - **`composer audit` en CI** — nouveau job `security-audit` dans `.github/workflows/ci.yml`, qui vérifie `composer.lock` contre la base d'avisories de sécurité (FriendsOfPHP/security-advisories) à chaque push/PR.
 - **`.github/dependabot.yml`** — mises à jour automatiques hebdomadaires des dépendances `composer` (groupées pour `symfony/*`) et des actions GitHub, en PR vers `develop`.
+- **`Route::auth(string $guard = 'session')` / `Route::throttle(int $maxAttempts = 60, int $decayMinutes = 1)`** — raccourcis chaînables pour les deux cas de middleware les plus courants, équivalents à `->middleware("auth:{$guard}")` / `->middleware("throttle:{$max},{$decay}")` mais plus difficiles à mal orthographier ; se combinent librement avec `name()`/`middleware()` dans n'importe quel ordre.
+- **`Ironflow\Health\Checks\QueueHealthCheck`** — vérifie que les tables `jobs`/`failed_jobs` restent sous un seuil configurable (`config/health.php → queue.*`, seuils distincts pour le backlog et les jobs en échec) ; dégrade en `warning` (pas `failed`) si les tables n'existent pas encore, pour qu'une queue simplement non migrée ne fasse pas échouer tout le rapport `/health`.
+- **`HealthManager::report()` chronomètre désormais chaque check individuellement** — `duration_ms` est ajouté au résultat de chaque check, y compris les checks tiers qui ne se chronomètrent pas eux-mêmes, pour attribuer un `/health` lent à une sonde précise plutôt qu'à une supposition.
+- **`BaseModule::path(string $suffix = '')`** — résout `Views/`, `routes.php`, `Database/Migrations/` par réflexion sur l'emplacement réel du fichier de la classe de module (`dirname((new \ReflectionClass($this))->getFileName())`), plutôt que par un chemin `modules/{Name}/...` construit en dur. C'est ce qui permet à un module d'être distribué comme package Composer ordinaire : `vendor/acme/blog-module/src/BlogModule.php` résout tout seul `vendor/acme/blog-module/src/Views/`, exactement comme un module local résout `modules/Blog/Views/`.
+- **`Ironflow\Module\PackageDiscovery::discover()`** — lit `vendor/composer/installed.json` (généré par Composer) et récupère la clé `extra.ironflow.modules` de chaque package installé ; `Application::boot()` fusionne le résultat avec `config('modules.enabled')` (moins `config('modules.disabled')` pour un opt-out ciblé) avant d'enregistrer quoi que ce soit. Un `composer require acme/blog-module` suffit désormais à activer son module, sans édition manuelle de `config/modules.php`. Échoue silencieusement (tableau vide) si `installed.json` est absent ou illisible — un layout d'install inhabituel ne doit jamais faire planter le boot pour une simple commodité optionnelle.
+- **`route:list --json`** — sortie machine-lisible de la table de routage (même structure que celle utilisée par le package `ironflow-framework/compass` pour générer `AGENTS.md` à l'intention des agents IA).
+- **`vite_dev_mode()` / `vite_client()`** (fonctions Twig, `FrameworkExtension`) — respectivement un booléen indiquant si le serveur de dev Vite tourne, et le `<script>` de bootstrap HMR à injecter une seule fois par page en mode dev ; complètent `vite_asset()`, déjà existante, pour un pipeline Vite + Tailwind CSS complet côté skeleton (voir `docs/frontend.md`).
 
 ### Changed
 
 - **Les 3 GitHub Actions de `ci.yml` (`actions/checkout`, `actions/cache`, `shivammathur/setup-php`) sont désormais épinglées sur leur SHA de commit complet** plutôt que sur un tag mutable (`@v4`, `@v2`) — empêche qu'un tag soit réécrit côté fournisseur pour injecter du code dans le pipeline CI (attaque de chaîne d'approvisionnement classique sur les Actions), au prix d'une mise à jour manuelle (ou via Dependabot, ci-dessus) à chaque nouvelle version voulue.
+- **`ModuleManager` ne prend plus de second argument `$modulesPath` au constructeur** — chaque module résout désormais ses propres chemins via `BaseModule::path()` (voir ci-dessus) plutôt que de dépendre d'un unique dossier `modules/` connu à l'avance. `Application::bootModule()` et les tests unitaires du gestionnaire de modules mis à jour en conséquence.
+- **Les 4 commandes `migrate*` (`MigrateCommand`, `MigrateFreshCommand`, `MigrateRollbackCommand`, `MigrateStatusCommand`) reçoivent désormais `ModuleManager` par injection** et appellent `Migrator::discoverPaths(base_path(), array_keys($modules->getModulePaths()))` au lieu de lire `config('modules.enabled')` directement — un module de package auto-découvert (voir `PackageDiscovery` ci-dessus) n'était auparavant jamais pris en compte par les migrations, seulement par le boot applicatif lui-même, alors qu'un `config('modules.enabled')` lu en dur ne contient jamais les modules découverts automatiquement.
+- **`Migrator::dropAll()` (utilisée par `migrate --fresh`/`migrate:fresh`) est désormais consciente du dialecte SQL** : désactive `FOREIGN_KEY_CHECKS` le temps du drop sur MySQL/MariaDB, utilise `DROP TABLE ... CASCADE` sur PostgreSQL — un schéma avec des clés étrangères inter-tables ne pouvait pas être entièrement dropped dans l'ordre naïf précédent sur ces deux moteurs (SQLite, sans contrainte FK appliquée par défaut, n'était pas concerné).
+- **`Migrator::discoverPaths()` déduplique désormais les chemins via `realpath()` + normalisation des séparateurs** — un même dossier de migrations trouvé à la fois par `glob()` (séparateurs `/`) et par réflexion de module (séparateurs natifs de l'OS, `\` sous Windows) apparaissait deux fois dans `migrate:status` et pouvait exécuter deux fois les mêmes fichiers.
+
+### Fixed
+
+- **`ThrottleRequests::handle()` levait un `TypeError` sur toute requête réelle passant par une route `throttle:N,M`.** Ses paramètres étaient typés `int $maxAttempts`/`int $decayMinutes`, alors que `Pipeline::resolve()` transmet toujours les paramètres `:params` d'un middleware sous forme de chaînes, sans coercition numérique nulle part en amont — sous `declare(strict_types=1)`, ça produisait une 500 avant même d'atteindre la logique de limitation. Aucun test existant ne l'avait détecté : les tests précédents instanciaient toujours le middleware directement avec de vrais `int`, jamais à travers un `Pipeline` avec des paramètres `:params` réels. Corrigé en `string|int` + cast interne (`(int) $maxAttempts`) ; 3 tests de non-régression ajoutés (appel direct, à travers un vrai `Pipeline`, comportement 429 au-delà du quota).
+- **`Ironflow\Template\FrameworkExtension` cherchait le fichier de statut du serveur de dev Vite à `public/build/hot`**, alors que `laravel-vite-plugin` l'écrit réellement à `public/hot` — `vite_asset()`/la nouvelle `vite_dev_mode()` ne détectaient donc jamais le mode dev, même serveur `npm run dev` lancé. Corrigé aux 3 emplacements concernés dans le fichier.
+- **`FrameworkExtension::funcViteAsset()` ne cherchait le manifeste de build qu'à `public/build/.vite/manifest.json`** ; `laravel-vite-plugin` v3.2 + Vite 8 (versions réellement épinglées côté skeleton) l'écrivent en réalité à l'emplacement plat `public/build/manifest.json`. Les deux emplacements sont désormais vérifiés, le plat en premier.
 
 ## [2.1.1] - 2026-09-22
 
@@ -295,7 +314,9 @@ Première version publique d'IronFlow. Le noyau est complet et testé (91 assert
 
 ---
 
-[Unreleased]: https://github.com/ironflow-framework/framework/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/ironflow-framework/framework/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/ironflow-framework/framework/compare/v2.1.1...v2.2.0
+[2.1.1]: https://github.com/ironflow-framework/framework/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/ironflow-framework/framework/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/ironflow-framework/framework/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/ironflow-framework/framework/compare/v1.1.0...v1.2.0

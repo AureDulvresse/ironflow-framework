@@ -29,8 +29,7 @@ class ModuleManager
     private array $bootOrder = [];
 
     public function __construct(
-        private readonly Container $container,
-        private readonly string $modulesPath
+        private readonly Container $container
     ) {
     }
 
@@ -92,13 +91,14 @@ class ModuleManager
         $meta = $this->meta[$class];
         $name = $meta->name;
 
-        // Register Twig namespace
-        $viewsDir = $this->modulesPath . '/' . ucfirst($name) . '/Views';
-        $module->registerViewNamespace($name, $viewsDir);
+        // Register Twig namespace — path derived from the module class's own
+        // file location (see BaseModule::path()), not the app's local
+        // modules/ directory, so a vendor-installed module's Views resolve
+        // correctly too.
+        $module->registerViewNamespace($name, $module->path('Views'));
 
-        // Load routes
-        $routesFile = $this->modulesPath . '/' . ucfirst($name) . '/routes.php';
-        $module->loadRoutes($routesFile);
+        // Load routes — same reflection-based path resolution.
+        $module->loadRoutes($module->path('routes.php'));
 
         // Wire event listeners
         /** @var Dispatcher $dispatcher */
@@ -228,6 +228,23 @@ class ModuleManager
     public function getLoadedModules(): array
     {
         return $this->modules;
+    }
+
+    /**
+     * Base directory of every registered module, keyed by FQCN — whether
+     * that's the app's local `modules/{Name}/` or a vendor/ Composer
+     * package. Used by Migrator::discoverPaths() to find each module's own
+     * migrations without assuming a fixed local folder layout.
+     *
+     * @return array<string, string> FQCN => absolute directory path
+     */
+    public function getModulePaths(): array
+    {
+        $paths = [];
+        foreach ($this->modules as $class => $module) {
+            $paths[$class] = $module->path();
+        }
+        return $paths;
     }
 
     /** Return all registered command classes across all modules. */

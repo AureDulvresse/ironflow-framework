@@ -45,6 +45,8 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
             new TwigFunction('route', [$this, 'funcRoute']),
             new TwigFunction('asset', [$this, 'funcAsset']),
             new TwigFunction('vite_asset', [$this, 'funcViteAsset']),
+            new TwigFunction('vite_dev_mode', [$this, 'funcViteDevMode']),
+            new TwigFunction('vite_client', [$this, 'funcViteClient'], $safe),
             new TwigFunction('csrf_token', [$this, 'funcCsrfToken']),
             new TwigFunction('csrf_field', [$this, 'funcCsrfField'], $safe),
             new TwigFunction('method_field', [$this, 'funcMethodField'], $safe),
@@ -91,7 +93,7 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
     {
         static $manifest = null;
 
-        $hotFilePath = $this->app->path('public', 'build/hot');
+        $hotFilePath = $this->app->path('public', 'hot');
 
         // Vite dev-server HMR mode
         if (is_file($hotFilePath)) {
@@ -99,12 +101,21 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
             return $base . '/' . ltrim($entry, '/');
         }
 
-        // Production: read Vite 5+ manifest (.vite/manifest.json)
+        // Production: read the manifest. Checked at two locations because
+        // where it actually lands depends on the plugin, not just the Vite
+        // version: vanilla Vite writes build.manifest=true to the nested
+        // .vite/manifest.json, but laravel-vite-plugin (verified against
+        // v3.2 / Vite 8, the combination in the skeleton's package.json)
+        // points it at the flat build/manifest.json instead.
         if ($manifest === null) {
-            $manifestPath = $this->app->path('public', 'build/.vite/manifest.json');
-            $manifest = is_file($manifestPath)
-                ? (json_decode((string) file_get_contents($manifestPath), true) ?? [])
-                : [];
+            $manifest = [];
+            foreach (['build/manifest.json', 'build/.vite/manifest.json'] as $relative) {
+                $manifestPath = $this->app->path('public', $relative);
+                if (is_file($manifestPath)) {
+                    $manifest = json_decode((string) file_get_contents($manifestPath), true) ?? [];
+                    break;
+                }
+            }
         }
 
         if (isset($manifest[$entry]['file'])) {
@@ -113,6 +124,43 @@ class FrameworkExtension extends AbstractExtension implements GlobalsInterface
 
         // Fallback: serve directly (dev without HMR or missing manifest)
         return '/build/' . $entry;
+    }
+
+    /**
+     * True while the Vite dev server is running (public/hot present).
+     *
+     * A CSS entry needs different markup in each mode — a <script
+     * type="module"> in dev (Vite serves CSS as a hot-reloadable JS module),
+     * a <link rel="stylesheet"> once built for production — so a template
+     * branches on this rather than vite_asset() trying to paper over the
+     * difference itself:
+     *
+     *   {% if vite_dev_mode() %}
+     *       {{ vite_client()|raw }}
+     *       <script type="module" src="{{ vite_asset('resources/css/app.css') }}"></script>
+     *   {% else %}
+     *       <link rel="stylesheet" href="{{ vite_asset('resources/css/app.css') }}">
+     *   {% endif %}
+     */
+    public function funcViteDevMode(): bool
+    {
+        return is_file($this->app->path('public', 'hot'));
+    }
+
+    /**
+     * The Vite HMR client bootstrap <script> tag — required once per page in
+     * dev mode for hot-reload/HMR to actually connect; vite_asset() alone
+     * only resolves individual entry URLs, it doesn't inject this. Returns
+     * '' in production, where there is no dev server to connect to.
+     */
+    public function funcViteClient(): string
+    {
+        $hotFilePath = $this->app->path('public', 'hot');
+        if (!is_file($hotFilePath)) {
+            return '';
+        }
+        $base = rtrim((string) file_get_contents($hotFilePath), "/\n");
+        return '<script type="module" src="' . htmlspecialchars($base) . '/@vite/client"></script>';
     }
 
     /**

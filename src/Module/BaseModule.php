@@ -24,6 +24,25 @@ abstract class BaseModule
         $this->container = $container;
     }
 
+    /**
+     * Absolute filesystem path to this module's own directory (or a path
+     * beneath it), derived by reflecting on the module class's own file
+     * location rather than string-templating from the app's local
+     * `modules/` directory.
+     *
+     * This is what lets a module work identically whether it's declared in
+     * the app's own `modules/{Name}/` folder or shipped inside a Composer
+     * package under `vendor/{vendor}/{package}/`: wherever the class file
+     * physically lives, `Views/`, `routes.php`, and `Database/Migrations/`
+     * are resolved relative to it. See ModuleManager::bootModule() and
+     * Migrator::discoverPaths().
+     */
+    final public function path(string $suffix = ''): string
+    {
+        $dir = dirname((new \ReflectionClass($this))->getFileName());
+        return $suffix === '' ? $dir : $dir . '/' . ltrim($suffix, '/');
+    }
+
     /** @return Router */
     protected function getRouter(): Router
     {
