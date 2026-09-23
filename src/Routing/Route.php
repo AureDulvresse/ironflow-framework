@@ -36,6 +36,32 @@ class Route
         return $this;
     }
 
+    /**
+     * Shortcut for ->middleware('auth') / ->middleware('auth:guard') — see
+     * Middleware\Authenticate. Chainable with everything else:
+     *
+     *   $router->get('/dashboard', [DashboardController::class, 'index'])
+     *       ->name('dashboard')
+     *       ->auth();
+     *
+     *   $router->get('/admin', [AdminController::class, 'index'])->auth('jwt');
+     */
+    public function auth(string $guard = 'session'): static
+    {
+        return $this->middleware($guard === 'session' ? 'auth' : "auth:{$guard}");
+    }
+
+    /**
+     * Shortcut for ->middleware("throttle:{$maxAttempts},{$decayMinutes}") —
+     * see Middleware\ThrottleRequests (sliding-window rate limiting).
+     *
+     *   $router->post('/login', [AuthController::class, 'login'])->throttle(5, 1);
+     */
+    public function throttle(int $maxAttempts = 60, int $decayMinutes = 1): static
+    {
+        return $this->middleware("throttle:{$maxAttempts},{$decayMinutes}");
+    }
+
     public function where(string $param, string $regex): static
     {
         $this->wheres[$param] = $regex;

@@ -7,6 +7,7 @@ namespace Ironflow\Console\Commands;
 use Ironflow\Console\Command;
 use Ironflow\Database\Connection;
 use Ironflow\Database\Migrations\Migrator;
+use Ironflow\Module\ModuleManager;
 
 /**
  * Runs all pending migrations. `--fresh` drops every table first
@@ -18,8 +19,10 @@ class MigrateCommand extends Command
     protected string $signature   = 'migrate {--path=} {--fresh} {--seed} {--rollback} {--force}';
     protected string $description = 'Run pending database migrations';
 
-    public function __construct(private readonly Connection $db)
-    {
+    public function __construct(
+        private readonly Connection $db,
+        private readonly ModuleManager $modules
+    ) {
         parent::__construct();
     }
 
@@ -141,9 +144,18 @@ class MigrateCommand extends Command
         return true;
     }
 
-    /** @return string[] */
+    /**
+     * @return string[]
+     *
+     * Uses ModuleManager::getModulePaths() rather than
+     * config('modules.enabled') directly: by the time a console command
+     * runs, Application::boot() has already merged the config file's list
+     * with any package-auto-discovered modules (see PackageDiscovery) into
+     * the manager — reading the raw config key here would silently miss
+     * every auto-discovered module's migrations.
+     */
     private function resolveMigrationPaths(): array
     {
-        return Migrator::discoverPaths(base_path(), (array) config('modules.enabled', []));
+        return Migrator::discoverPaths(base_path(), array_keys($this->modules->getModulePaths()));
     }
 }

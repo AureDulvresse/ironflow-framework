@@ -12,7 +12,7 @@ use Ironflow\Routing\Router;
  */
 class RouteListCommand extends Command
 {
-    protected string $signature   = 'route:list';
+    protected string $signature   = 'route:list {--json : Machine-readable output, e.g. for a script or an AI agent}';
     protected string $description = 'List all registered routes';
 
     public function __construct(private readonly Router $router)
@@ -36,9 +36,14 @@ class RouteListCommand extends Command
                     'uri'        => $route->getUri(),
                     'name'       => $route->getName() ?? '',
                     'action'     => $action,
-                    'middleware' => implode(', ', $route->getMiddlewares()),
+                    'middleware' => $route->getMiddlewares(),
                 ];
             }
+        }
+
+        if ($this->option('json')) {
+            $this->output->writeln((string) json_encode($routes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            return self::SUCCESS;
         }
 
         if (empty($routes)) {

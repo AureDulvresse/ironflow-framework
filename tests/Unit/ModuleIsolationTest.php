@@ -25,7 +25,7 @@ use Ironflow\Tests\Unit\Fixtures\ProviderModuleA;
 function bootedContainer(): Container
 {
     $container = new Container();
-    $manager   = new ModuleManager($container, sys_get_temp_dir());
+    $manager   = new ModuleManager($container);
     $manager->register(ProviderModuleA::class);
     $manager->register(ConsumerModuleB::class);
     $manager->boot();

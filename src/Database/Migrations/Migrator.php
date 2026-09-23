@@ -184,25 +184,39 @@ class Migrator
      * or just `config('modules.enabled', [])`; both work identically since
      * only the class's file location is used, never its registration state.
      *
-     * @param string[] $moduleClasses
+     * @param array<array-key, mixed> $moduleClasses Expected to be class-name
+     *        strings (e.g. straight from config('modules.enabled')), but not
+     *        assumed — anything else is skipped rather than trusted.
      * @return string[]
      */
     public static function discoverPaths(string $basePath, array $moduleClasses = []): array
     {
+        // Keyed by a normalized (realpath'd, forward-slash) form so the same
+        // directory found twice — once via the glob below, once via a
+        // module class's reflection-derived path — is never added twice.
+        // A plain in_array() on raw strings isn't reliable here: glob()
+        // returns paths built with '/' while ReflectionClass::getFileName()
+        // returns whatever separator PHP resolved the include with (often
+        // '\' on Windows), so textually-different strings can point at the
+        // exact same directory.
         $paths = [];
 
-        $global = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'database' . DIRECTORY_SEPARATOR . 'migrations';
-        if (is_dir($global)) {
-            $paths[] = $global;
-        }
+        $addPath = function (string $dir) use (&$paths): void {
+            if (!is_dir($dir)) {
+                return;
+            }
+            $real = realpath($dir) ?: $dir;
+            $key = str_replace('\\', '/', $real);
+            $paths[$key] = $dir;
+        };
+
+        $addPath(rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'database' . DIRECTORY_SEPARATOR . 'migrations');
 
         $modulesPath = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'modules';
         if (is_dir($modulesPath)) {
             foreach (['/*/Database/Migrations', '/*/Migrations'] as $pattern) {
                 foreach (glob($modulesPath . $pattern) ?: [] as $dir) {
-                    if (!in_array($dir, $paths, true)) {
-                        $paths[] = $dir;
-                    }
+                    $addPath($dir);
                 }
             }
         }
@@ -217,14 +231,11 @@ class Migrator
                 continue;
             }
             foreach (['/Database/Migrations', '/Migrations'] as $suffix) {
-                $p = rtrim($dir, '/\\') . $suffix;
-                if (is_dir($p) && !in_array($p, $paths, true)) {
-                    $paths[] = $p;
-                }
+                $addPath(rtrim($dir, '/\\') . $suffix);
             }
         }
 
-        return $paths;
+        return array_values($paths);
     }
 
     private function getPendingMigrations(string $path): array

@@ -7,6 +7,7 @@ namespace Ironflow\Console\Commands;
 use Ironflow\Console\Command;
 use Ironflow\Database\Connection;
 use Ironflow\Database\Migrations\Migrator;
+use Ironflow\Module\ModuleManager;
 
 /**
  * Lists every discovered migration and whether it has been run.
@@ -16,15 +17,19 @@ class MigrateStatusCommand extends Command
     protected string $signature = 'migrate:status';
     protected string $description = 'Show the status of each migration';
 
-    public function __construct(private readonly Connection $db)
-    {
+    public function __construct(
+        private readonly Connection $db,
+        private readonly ModuleManager $modules
+    ) {
         parent::__construct();
     }
 
     protected function handle(): int
     {
         $migrator = new Migrator($this->db);
-        $paths    = Migrator::discoverPaths(base_path(), (array) config('modules.enabled', []));
+        // See MigrateCommand::resolveMigrationPaths() — module paths come
+        // from the manager (config + auto-discovered), not raw config().
+        $paths    = Migrator::discoverPaths(base_path(), array_keys($this->modules->getModulePaths()));
 
         $all = [];
         foreach ($paths as $p) {

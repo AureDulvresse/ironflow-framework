@@ -27,9 +27,22 @@ class ThrottleRequests
     {
     }
 
-    public function handle(Request $request, callable $next, int $maxAttempts = 60, int $decayMinutes = 1): Response
+    /**
+     * $maxAttempts/$decayMinutes are typed string|int, not int: every
+     * colon-parameter coming through the middleware pipeline (Pipeline::resolve()
+     * splitting 'throttle:60,1' on ',') arrives as a string, never actually
+     * cast to int anywhere upstream. With declare(strict_types=1) in this
+     * file, a plain `int $maxAttempts` parameter would reject that string
+     * outright — this previously threw a TypeError on every single request
+     * to a route using 'throttle:N,M', undetected until one was actually
+     * exercised end-to-end (unit tests construct ThrottleRequests directly
+     * with real ints, which never goes through the pipeline's string path).
+     */
+    public function handle(Request $request, callable $next, string|int $maxAttempts = 60, string|int $decayMinutes = 1): Response
     {
         $limiter = $this->limiter;
+        $maxAttempts = (int) $maxAttempts;
+        $decayMinutes = (int) $decayMinutes;
 
         $key = $this->resolveKey($request);
         $decaySeconds = $decayMinutes * 60;
