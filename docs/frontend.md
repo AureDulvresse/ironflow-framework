@@ -93,6 +93,38 @@ Vite's own historical default when `build.manifest` is enabled directly.
 If you swap in a different bundler setup, confirm which one yours actually
 writes before assuming either path.
 
+## Dynamic class names and Tailwind's scanner
+
+Tailwind v4 (via `@tailwindcss/vite`) generates CSS by scanning project files
+for literal, complete class-name tokens — it does no templating-language
+evaluation, Twig included. A class built at render time from a variable,
+e.g.:
+
+```twig
+{# Never generates any CSS — nothing to scan for #}
+<span class="bg-{{ status }}-500"></span>
+```
+
+never appears as `bg-emerald-500`/`bg-red-500`/... anywhere in the raw
+`.twig` file, so Tailwind never generates those utilities — the element
+renders with **no color at all** in production, a silent failure that
+only shows up once you actually build (`npm run dev`'s pre-bundled dev CSS
+can mask it, since Tailwind rescans on every change and may have already
+generated the class from an earlier, literal usage elsewhere).
+
+Fix it by keeping every candidate class as a complete literal string
+somewhere Tailwind scans — a Twig map literal works well and reads cleanly:
+
+```twig
+{% set dot = {'ok': 'bg-emerald-500', 'warning': 'bg-amber-400', 'failed': 'bg-red-500'} %}
+<span class="{{ dot[status] ?? 'bg-slate-500' }}"></span>
+```
+
+Each string inside the map (`'bg-emerald-500'`, ...) is a real, complete
+token in the file's raw text, so the scanner finds it regardless of the
+Twig syntax wrapped around it — verified against the skeleton's own home
+page, which maps health-check status to dot/pill colors this way.
+
 ## Adding a page's own JS/CSS
 
 Import it from `resources/js/app.js` (or add a new entry to `vite.config.js`'s
