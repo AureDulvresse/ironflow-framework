@@ -8,6 +8,7 @@ use Ironflow\Container;
 use Ironflow\Exceptions\HttpException;
 use Ironflow\Routing\Route;
 use Ironflow\Routing\Router;
+use Ironflow\Tests\Unit\Fixtures\AttributeRoutedController;
 use Ironflow\Tests\Unit\Fixtures\RouterArticleStub;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -140,4 +141,37 @@ test('auth(), throttle() and middleware() all chain onto the same route', functi
 
     expect($route->getName())->toBe('login');
     expect($route->getMiddlewares())->toBe(['auth:jwt', 'throttle:5,1', 'sanitize']);
+});
+
+test('controller() registers every #[Route]-attributed method', function () {
+    $this->router->controller(AttributeRoutedController::class);
+
+    $index = $this->router->getRoutes()->getByName('posts.index');
+    expect($index)->not->toBeNull();
+    expect($index->getUri())->toBe('/posts/');
+    expect($index->getMethod())->toBe('GET');
+    expect($index->getAction())->toBe([AttributeRoutedController::class, 'index']);
+
+    $update = $this->router->getRoutes()->getByName('posts.update');
+    expect($update)->not->toBeNull();
+    expect($update->getMethod())->toBe('POST');
+});
+
+test('controller() merges the class-level #[Route] middleware with the method-level one', function () {
+    $this->router->controller(AttributeRoutedController::class);
+
+    $index = $this->router->getRoutes()->getByName('posts.index');
+    expect($index->getMiddlewares())->toBe(['web']);
+
+    $update = $this->router->getRoutes()->getByName('posts.update');
+    expect($update->getMiddlewares())->toBe(['web', 'auth']);
+});
+
+test('controller() honors the current group() prefix, same as get()/post()', function () {
+    $this->router->group(['prefix' => '/admin'], function ($r) {
+        $r->controller(AttributeRoutedController::class);
+    });
+
+    $index = $this->router->getRoutes()->getByName('posts.index');
+    expect($index->getUri())->toBe('/admin/posts/');
 });

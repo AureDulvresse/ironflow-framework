@@ -10,6 +10,8 @@ use Ironflow\Http\FormRequest;
 use Ironflow\Http\Request;
 use Ironflow\Middleware\MiddlewareResolver;
 use Ironflow\Middleware\Pipeline;
+use Ironflow\Routing\Attributes\Route as RouteAttribute;
+use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionParameter;
@@ -104,6 +106,50 @@ class Router
         $this->put("{$prefix}/{{$singular}}", [$controller, 'update'])->name("{$name}.update");
         $this->patch("{$prefix}/{{$singular}}", [$controller, 'update']);
         $this->delete("{$prefix}/{{$singular}}", [$controller, 'destroy'])->name("{$name}.destroy");
+    }
+
+    // ─────────────────────── Attribute routing ────────────────────────
+
+    /**
+     * Registers every #[Route] attribute found on $class's public methods —
+     * an alternative to writing $router->get(...) by hand for each action.
+     * Still called explicitly from a module's routes.php, same as any other
+     * route: this changes where a route's metadata lives, not IronFlow's
+     * routing-is-module-only convention. Honors the current group()
+     * prefix/middleware exactly like get()/post()/etc., since it goes
+     * through the same addRoute().
+     */
+    public function controller(string $class): void
+    {
+        $reflection = new ReflectionClass($class);
+
+        $prefix = '';
+        $sharedMiddleware = [];
+        $classAttribute = $reflection->getAttributes(RouteAttribute::class)[0] ?? null;
+        if ($classAttribute !== null) {
+            $classRoute = $classAttribute->newInstance();
+            $prefix = rtrim($classRoute->uri, '/');
+            $sharedMiddleware = (array) $classRoute->middleware;
+        }
+
+        foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            foreach ($method->getAttributes(RouteAttribute::class) as $attribute) {
+                $routeAttr = $attribute->newInstance();
+                $uri = $prefix . '/' . ltrim($routeAttr->uri, '/');
+                $middleware = array_merge($sharedMiddleware, (array) $routeAttr->middleware);
+
+                foreach ((array) $routeAttr->method as $httpMethod) {
+                    $route = $this->addRoute(strtoupper($httpMethod), $uri, [$class, $method->getName()]);
+
+                    if ($middleware !== []) {
+                        $route->middleware($middleware);
+                    }
+                    if ($routeAttr->name !== null) {
+                        $route->name($routeAttr->name);
+                    }
+                }
+            }
+        }
     }
 
     // ─────────────────────── URL generation ──────────────────────────

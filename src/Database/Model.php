@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Ironflow\Database;
 
 use Ironflow\Application;
+use Ironflow\Database\Attributes\Column;
+use Ironflow\Database\Attributes\Table;
 use Ironflow\Database\Relations\BelongsTo;
 use Ironflow\Database\Relations\BelongsToMany;
 use Ironflow\Database\Relations\HasMany;
@@ -14,6 +16,7 @@ use Ironflow\Events\Dispatcher;
 use Ironflow\Support\Collection;
 use Ironflow\Support\Paginator;
 use DateTimeImmutable;
+use ReflectionClass;
 
 /**
  * Active Record Model base class.
@@ -43,6 +46,9 @@ abstract class Model
     /** @var array<class-string, true> Classes whose boot{Trait}() hooks have already run. */
     private static array $booted = [];
 
+    /** @var array<class-string, array{table: ?string, fillable: string[], hidden: string[], casts: array<string,string>}> */
+    private static array $attributeConfig = [];
+
     // ─────────────────────── State ───────────────────────────────────
 
     private array $attributes = [];
@@ -55,6 +61,7 @@ abstract class Model
     public function __construct(array $attributes = [])
     {
         static::bootIfNotBooted();
+        $this->applyAttributeConfig();
         $this->fill($attributes);
     }
 
@@ -82,6 +89,71 @@ abstract class Model
             if (method_exists(static::class, $method)) {
                 static::$method();
             }
+        }
+
+        self::$attributeConfig[static::class] = self::resolveAttributeConfig(static::class);
+    }
+
+    /**
+     * Reads #[Table]/#[Column] off the class once per class (cached
+     * alongside the boot-once state above) — reflection is comparatively
+     * expensive, and this config never changes between instances.
+     *
+     * @return array{table: ?string, fillable: string[], hidden: string[], casts: array<string,string>}
+     */
+    private static function resolveAttributeConfig(string $class): array
+    {
+        $config = ['table' => null, 'fillable' => [], 'hidden' => [], 'casts' => []];
+        $reflection = new ReflectionClass($class);
+
+        $tableAttribute = $reflection->getAttributes(Table::class)[0] ?? null;
+        if ($tableAttribute !== null) {
+            $config['table'] = $tableAttribute->newInstance()->name;
+        }
+
+        foreach ($reflection->getAttributes(Column::class) as $columnAttribute) {
+            $column = $columnAttribute->newInstance();
+
+            if ($column->fillable) {
+                $config['fillable'][] = $column->name;
+            }
+            if ($column->hidden) {
+                $config['hidden'][] = $column->name;
+            }
+            if ($column->cast !== null) {
+                $config['casts'][$column->name] = $column->cast;
+            }
+        }
+
+        return $config;
+    }
+
+    /**
+     * Applies the cached #[Table]/#[Column] config onto this instance's
+     * $table/$fillable/$hidden/$casts — additively, never overriding an
+     * explicit property declaration on the model itself: $table/$fillable
+     * only apply if the property was left at its empty default, $hidden
+     * merges (both sources can hide different fields), and $casts merges
+     * with the explicit array winning on a key collision.
+     */
+    private function applyAttributeConfig(): void
+    {
+        $config = self::$attributeConfig[static::class] ?? null;
+        if ($config === null) {
+            return;
+        }
+
+        if ($config['table'] !== null && $this->table === '') {
+            $this->table = $config['table'];
+        }
+        if ($config['fillable'] !== [] && $this->fillable === []) {
+            $this->fillable = $config['fillable'];
+        }
+        if ($config['hidden'] !== []) {
+            $this->hidden = array_unique(array_merge($this->hidden, $config['hidden']));
+        }
+        if ($config['casts'] !== []) {
+            $this->casts = array_merge($config['casts'], $this->casts);
         }
     }
 

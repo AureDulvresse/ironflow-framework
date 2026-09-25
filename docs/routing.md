@@ -149,6 +149,47 @@ no container-based parameter resolution beyond that (unlike controller
 methods). Return arrays/objects to get an automatic `JsonResponse`, a
 scalar for a plain HTML `Response`, or build a `Response` yourself.
 
+## `#[Route]` attribute routing
+
+An alternative to writing `$router->get(...)` by hand for each action —
+declare the route on the controller method itself:
+
+```php
+use Ironflow\Routing\Attributes\Route;
+
+#[Route('/posts', middleware: 'web')]
+class PostController extends Controller
+{
+    #[Route('/', name: 'posts.index')]
+    public function index(): Response { /* ... */ }
+
+    #[Route('/{id}', method: 'POST', name: 'posts.update', middleware: 'auth')]
+    public function update(int|string $id): Response { /* ... */ }
+}
+```
+
+Then register the whole controller from `routes.php`, same as any other
+route — this only changes where a route's metadata lives, not IronFlow's
+routing-is-module-only convention (see [Modules](modules.md)):
+
+```php
+// modules/Blog/routes.php
+$router->controller(PostController::class);
+```
+
+A class-level `#[Route]` supplies a URI prefix and middleware shared by
+every attributed method (`name`/`method` are ignored there). `method`
+accepts a single verb or an array (`method: ['GET', 'HEAD']`) to register
+the same handler under more than one. `controller()` goes through the same
+`addRoute()` as `get()`/`post()`/etc., so it honors the current `group()`
+prefix and middleware exactly the same way:
+
+```php
+$router->group(['prefix' => '/admin'], function () use ($router) {
+    $router->controller(PostController::class); // -> /admin/posts/...
+});
+```
+
 ## Loading routes
 
 Routes live in each module's `routes.php`, loaded automatically by

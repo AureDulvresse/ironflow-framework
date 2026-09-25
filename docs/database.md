@@ -65,6 +65,40 @@ class Post extends Model
 }
 ```
 
+### `#[Table]` / `#[Column]` — the same config, as attributes
+
+An alternative to the arrays above:
+
+```php
+use Ironflow\Database\Attributes\Column;
+use Ironflow\Database\Attributes\Table;
+
+#[Table('posts')]
+#[Column('title')]
+#[Column('body')]
+#[Column('internal_notes', fillable: false, hidden: true)]
+#[Column('published', cast: 'bool')]
+#[Column('published_at', cast: 'datetime')]
+class Post extends Model
+{
+}
+```
+
+Deliberately class-level and repeatable, never property-level: a `Model`'s
+fields are virtual (stored in an internal array, read/written through
+`__get()`/`__set()`) — a real declared property with the same name (e.g.
+`public string $title`) would shadow those magic methods entirely, so
+`$post->title` would read an uninitialized native property instead of ever
+reaching the model's own storage. There is deliberately nothing to attach
+a property attribute to here.
+
+Merges with, rather than replaces, an explicit array declaration on the
+same model: `$table`/`$fillable` only apply from attributes if the
+property was left at its empty default, `$hidden` merges (both sources can
+hide different fields), and `$casts` merges with the explicit array
+winning on a key collision. Mixing styles (some columns as `#[Column]`,
+others still in `$fillable`) works fine.
+
 ### CRUD
 
 ```php

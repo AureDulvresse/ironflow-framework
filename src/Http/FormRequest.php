@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Ironflow\Http;
 
 use Ironflow\Exceptions\HttpException;
+use Ironflow\Validation\Attributes\RuleAttribute;
 use Ironflow\Validation\ValidationException;
 use Ironflow\Validation\ValidatorFactory;
+use ReflectionAttribute;
+use ReflectionClass;
 
 /**
  * Base class for typed, auto-validated form / API requests.
@@ -111,6 +114,46 @@ abstract class FormRequest extends Request
     public function merge(array $data): void
     {
         $this->request->add($data);
+    }
+
+    /**
+     * Builds a rules array from #[Required]/#[Email]/... attributes declared
+     * on this class's properties — an alternative to writing rules() by hand:
+     *
+     *   class StorePostRequest extends FormRequest
+     *   {
+     *       #[Required, StringType, Max(255)]
+     *       public string $title;
+     *
+     *       public function rules(): array
+     *       {
+     *           return $this->rulesFromAttributes();
+     *       }
+     *   }
+     *
+     * Only reflects the class definition — these properties never need to
+     * hold real submitted data, since rules() runs before validation, not
+     * after (unlike Model, FormRequest has no __get()/__set() a declared
+     * property could shadow, so a real property here is safe).
+     *
+     * @return array<string, string>
+     */
+    protected function rulesFromAttributes(): array
+    {
+        $rules = [];
+        $reflection = new ReflectionClass($this);
+
+        foreach ($reflection->getProperties() as $property) {
+            $fragments = [];
+            foreach ($property->getAttributes(RuleAttribute::class, ReflectionAttribute::IS_INSTANCEOF) as $attribute) {
+                $fragments[] = $attribute->newInstance()->toRule();
+            }
+            if ($fragments !== []) {
+                $rules[$property->getName()] = implode('|', $fragments);
+            }
+        }
+
+        return $rules;
     }
 
     // ── Factory ───────────────────────────────────────────────────────
