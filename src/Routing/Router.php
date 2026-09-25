@@ -118,20 +118,41 @@ class Router
      * routing-is-module-only convention. Honors the current group()
      * prefix/middleware exactly like get()/post()/etc., since it goes
      * through the same addRoute().
+     *
+     * A class-level #[Route] is repeatable — a controller with more than
+     * one is registered once per class attribute (every method under each
+     * prefix/middleware combination), not just the first. A route name
+     * reused across more than one of those registrations resolves to
+     * whichever was added last, same as calling ->name() twice anywhere
+     * else in the router — avoid combining a repeated class-level #[Route]
+     * with a fixed method-level `name:`.
      */
     public function controller(string $class): void
     {
         $reflection = new ReflectionClass($class);
+        $classAttributes = $reflection->getAttributes(RouteAttribute::class);
 
-        $prefix = '';
-        $sharedMiddleware = [];
-        $classAttribute = $reflection->getAttributes(RouteAttribute::class)[0] ?? null;
-        if ($classAttribute !== null) {
-            $classRoute = $classAttribute->newInstance();
-            $prefix = rtrim($classRoute->uri, '/');
-            $sharedMiddleware = (array) $classRoute->middleware;
+        if ($classAttributes === []) {
+            $this->registerControllerMethods($reflection, '', []);
+            return;
         }
 
+        foreach ($classAttributes as $classAttribute) {
+            $classRoute = $classAttribute->newInstance();
+            $this->registerControllerMethods(
+                $reflection,
+                rtrim($classRoute->uri, '/'),
+                (array) $classRoute->middleware
+            );
+        }
+    }
+
+    /**
+     * @param ReflectionClass<object> $reflection
+     * @param string[] $sharedMiddleware
+     */
+    private function registerControllerMethods(ReflectionClass $reflection, string $prefix, array $sharedMiddleware): void
+    {
         foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             foreach ($method->getAttributes(RouteAttribute::class) as $attribute) {
                 $routeAttr = $attribute->newInstance();
@@ -139,7 +160,7 @@ class Router
                 $middleware = array_merge($sharedMiddleware, (array) $routeAttr->middleware);
 
                 foreach ((array) $routeAttr->method as $httpMethod) {
-                    $route = $this->addRoute(strtoupper($httpMethod), $uri, [$class, $method->getName()]);
+                    $route = $this->addRoute(strtoupper($httpMethod), $uri, [$reflection->getName(), $method->getName()]);
 
                     if ($middleware !== []) {
                         $route->middleware($middleware);

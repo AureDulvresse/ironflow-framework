@@ -190,6 +190,21 @@ $router->group(['prefix' => '/admin'], function () use ($router) {
 });
 ```
 
+A class-level `#[Route]` is repeatable — stack more than one to register the
+same controller under multiple prefixes (e.g. a legacy alias):
+
+```php
+#[Route('/posts')]
+#[Route('/articles')]  // both prefixes registered, not just the first
+class PostController extends Controller { /* ... */ }
+```
+
+Each attributed method is then registered once per class-level prefix. A
+fixed `name:` on a method resolves, via `route()`, to whichever
+registration was added last if reused across more than one prefix this
+way — give each prefix's registration a distinct name if you need both
+reachable by name.
+
 ## Loading routes
 
 Routes live in each module's `routes.php`, loaded automatically by

@@ -9,6 +9,7 @@ use Ironflow\Exceptions\HttpException;
 use Ironflow\Routing\Route;
 use Ironflow\Routing\Router;
 use Ironflow\Tests\Unit\Fixtures\AttributeRoutedController;
+use Ironflow\Tests\Unit\Fixtures\MultiPrefixRoutedController;
 use Ironflow\Tests\Unit\Fixtures\RouterArticleStub;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -174,4 +175,17 @@ test('controller() honors the current group() prefix, same as get()/post()', fun
 
     $index = $this->router->getRoutes()->getByName('posts.index');
     expect($index->getUri())->toBe('/admin/posts/');
+});
+
+test('controller() registers every repeated class-level #[Route], not just the first', function () {
+    $this->router->controller(MultiPrefixRoutedController::class);
+
+    // Both prefixes must actually match — getByName() alone can't tell the
+    // two apart, since the method-level #[Route] shares one name across
+    // both registrations.
+    [$postsRoute] = $this->router->getRoutes()->match('GET', '/posts/5');
+    [$articlesRoute] = $this->router->getRoutes()->match('GET', '/articles/5');
+
+    expect($postsRoute->getUri())->toBe('/posts/{id}');
+    expect($articlesRoute->getUri())->toBe('/articles/{id}');
 });
