@@ -1,6 +1,6 @@
 # IronFlow Framework
 
-![IronFlow](https://raw.githubusercontent.com/ironflow-framework/framework/main/.github/assets/logo.png)
+![IronFlow](https://github.com/AureDulvresse/ironflow-framework/blob/main/logo.png)
 
 The technical core of IronFlow: dependency container, HMVC modules, HTTP routing, CLI, ORM, security, and application services.
 
