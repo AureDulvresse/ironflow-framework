@@ -10,6 +10,8 @@ use Ironflow\Http\FormRequest;
 use Ironflow\Http\Request;
 use Ironflow\Middleware\MiddlewareResolver;
 use Ironflow\Middleware\Pipeline;
+use Ironflow\Routing\Attributes\Route as RouteAttribute;
+use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionParameter;
@@ -104,6 +106,71 @@ class Router
         $this->put("{$prefix}/{{$singular}}", [$controller, 'update'])->name("{$name}.update");
         $this->patch("{$prefix}/{{$singular}}", [$controller, 'update']);
         $this->delete("{$prefix}/{{$singular}}", [$controller, 'destroy'])->name("{$name}.destroy");
+    }
+
+    // ─────────────────────── Attribute routing ────────────────────────
+
+    /**
+     * Registers every #[Route] attribute found on $class's public methods —
+     * an alternative to writing $router->get(...) by hand for each action.
+     * Still called explicitly from a module's routes.php, same as any other
+     * route: this changes where a route's metadata lives, not IronFlow's
+     * routing-is-module-only convention. Honors the current group()
+     * prefix/middleware exactly like get()/post()/etc., since it goes
+     * through the same addRoute().
+     *
+     * A class-level #[Route] is repeatable — a controller with more than
+     * one is registered once per class attribute (every method under each
+     * prefix/middleware combination), not just the first. A route name
+     * reused across more than one of those registrations resolves to
+     * whichever was added last, same as calling ->name() twice anywhere
+     * else in the router — avoid combining a repeated class-level #[Route]
+     * with a fixed method-level `name:`.
+     */
+    public function controller(string $class): void
+    {
+        $reflection = new ReflectionClass($class);
+        $classAttributes = $reflection->getAttributes(RouteAttribute::class);
+
+        if ($classAttributes === []) {
+            $this->registerControllerMethods($reflection, '', []);
+            return;
+        }
+
+        foreach ($classAttributes as $classAttribute) {
+            $classRoute = $classAttribute->newInstance();
+            $this->registerControllerMethods(
+                $reflection,
+                rtrim($classRoute->uri, '/'),
+                (array) $classRoute->middleware
+            );
+        }
+    }
+
+    /**
+     * @param ReflectionClass<object> $reflection
+     * @param string[] $sharedMiddleware
+     */
+    private function registerControllerMethods(ReflectionClass $reflection, string $prefix, array $sharedMiddleware): void
+    {
+        foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            foreach ($method->getAttributes(RouteAttribute::class) as $attribute) {
+                $routeAttr = $attribute->newInstance();
+                $uri = $prefix . '/' . ltrim($routeAttr->uri, '/');
+                $middleware = array_merge($sharedMiddleware, (array) $routeAttr->middleware);
+
+                foreach ((array) $routeAttr->method as $httpMethod) {
+                    $route = $this->addRoute(strtoupper($httpMethod), $uri, [$reflection->getName(), $method->getName()]);
+
+                    if ($middleware !== []) {
+                        $route->middleware($middleware);
+                    }
+                    if ($routeAttr->name !== null) {
+                        $route->name($routeAttr->name);
+                    }
+                }
+            }
+        }
     }
 
     // ─────────────────────── URL generation ──────────────────────────

@@ -10,6 +10,14 @@ Les versions `0.1.x`/`0.2.0` (juin 2026) correspondent à la phase de prototypag
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-09-25
+
+### Added
+
+- **`#[Route]` attribute routing** (`Ironflow\Routing\Attributes\Route`) — an alternative to writing `$router->get(...)` by hand for each controller action: `#[Route('/{id}', method: 'POST', name: 'posts.update', middleware: 'auth')]` on a method, registered via `Router::controller(PostController::class)`. A class-level `#[Route('/posts', middleware: 'web')]` supplies a URI prefix and middleware shared by every attributed method. Still called explicitly from a module's `routes.php` like any other route — this changes where a route's metadata lives, not IronFlow's routing-is-module-only convention — and honors the current `group()` prefix/middleware since it goes through the same `addRoute()` as every other registration method.
+- **`#[Table]`/`#[Column]` model attributes** (`Ironflow\Database\Attributes\{Table,Column}`) — an alternative to declaring `$table`/`$fillable`/`$hidden`/`$casts` arrays: `#[Table('posts')]` plus one repeatable `#[Column('title')]` per column on the class. Deliberately class-level, not property-level: `Model`'s fields are virtual (stored in an internal array, read/written through `__get()`/`__set()`) — a real declared property with the same name would shadow those magic methods and silently break attribute access, verified the hard way while building this (a `public string $title` property on the model bypasses `__get()`/`__set()` entirely, so nothing was actually reading from the intended array-backed storage). Merges with, rather than replaces, an explicit array declaration on the model: `$table`/`$fillable` only apply from attributes if the property was left empty, `$hidden` merges, `$casts` merges with the explicit array winning on a key collision.
+- **Validation attributes on `FormRequest`** (`Ironflow\Validation\Attributes\{Required,Nullable,Email,StringType,IntegerType,Min,Max,Confirmed,In,Rule}`) — an alternative to hand-writing the `rules()` array: `#[Required, StringType, Max(255)] public string $title;` then `rules(): array { return $this->rulesFromAttributes(); }`. Multiple attributes on one property combine into a single pipe rule in declaration order. `#[Rule('...')]` is a raw escape hatch for any rule without its own dedicated attribute. Unlike the `Model` attributes above, these sit on real declared properties safely — `FormRequest` has no `__get()`/`__set()` for a property to shadow, since `rulesFromAttributes()` only ever reflects the class definition and never reads the properties' actual values.
+
 ## [2.2.0] - 2026-09-23
 
 ### Added
@@ -314,7 +322,8 @@ Première version publique d'IronFlow. Le noyau est complet et testé (91 assert
 
 ---
 
-[Unreleased]: https://github.com/ironflow-framework/framework/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/ironflow-framework/framework/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/ironflow-framework/framework/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/ironflow-framework/framework/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/ironflow-framework/framework/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/ironflow-framework/framework/compare/v2.0.0...v2.1.0

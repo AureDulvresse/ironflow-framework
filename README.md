@@ -4,20 +4,10 @@
 
 The technical core of IronFlow: dependency container, HMVC modules, HTTP routing, CLI, ORM, security, and application services.
 
-<p align="start">
-  <a href="https://packagist.org/packages/ironflow-framework/framework">
-    <img src="https://img.shields.io/packagist/v/ironflow-framework/framework" alt="Latest Version" />
-  </a>
-  <a href="https://packagist.org/packages/ironflow-framework/framework">
-    <img src="https://img.shields.io/packagist/dt/ironflow-framework/framework" alt="Total Downloads">
-  </a>
-  <a href="https://packagist.org/packages/ironflow-framework/framework">
-    <img src="https://img.shields.io/packagist/l/ironflow-framework/framework" alt="License">
-  </a>
-  <a href="https://github.com/AureDulvresse/ironflow-framework/issues">
-  <img src="https://img.shields.io/github/issues/AureDulvresse/ironflow-framework" alt="GitHub issues">
-  </a>
-</p>
+[![CI](https://img.shields.io/github/actions/workflow/status/ironflow-framework/framework/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/ironflow-framework/framework/actions/workflows/ci.yml)
+[![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
+[![License MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.3.0-f97316?style=flat-square)](https://github.com/ironflow-framework/framework/releases)
 
 This repository contains the framework core. It is not a ready-to-use application project: for starting an application, it is recommended to use the associated skeleton repository.
 

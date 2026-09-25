@@ -22,6 +22,47 @@ See [Requests & Responses](http.md#formrequest--typed-auto-validated-input)
 for the full picture — the Router validates it for you before your
 controller method runs.
 
+### `#[Required]`/`#[Email]`/... — rules as attributes
+
+An alternative to hand-writing the `rules()` array:
+
+```php
+use Ironflow\Validation\Attributes\{Required, Email, StringType, Max, In, Nullable, Confirmed, Rule};
+
+class StorePostRequest extends FormRequest
+{
+    #[Required, StringType, Max(255)]
+    public string $title;
+
+    #[Required, In(['draft', 'published'])]
+    public string $status;
+
+    #[Nullable, Rule('min:8')]
+    public ?string $password = null;
+
+    public function rules(): array
+    {
+        return $this->rulesFromAttributes();
+    }
+}
+```
+
+`rulesFromAttributes()` (protected, on `FormRequest`) reflects the class
+definition only — these properties never need to hold real submitted data,
+since `rules()` runs before validation, not after. Multiple attributes on
+one property combine into a single pipe rule, in declaration order
+(`#[Required, StringType, Max(255)]` → `'required|string|max:255'`).
+Shipped attributes cover the common cases (`Required`, `Nullable`, `Email`,
+`StringType`, `IntegerType`, `Min`, `Max`, `Confirmed`, `In`); `#[Rule('...')]`
+is a raw escape hatch for anything else in the [rule reference](#rule-reference)
+below, or a custom rule name. A property with no validation attribute is
+simply absent from the resolved array — mixing attributes and a
+hand-written `rules()` addition (e.g. `array_merge`) works fine too.
+
+Unlike `Model`'s `#[Column]` (see [Database & ORM](database.md)),
+`FormRequest` has no `__get()`/`__set()` to shadow, so these attributes go
+on real declared properties safely.
+
 ## Manual validation
 
 ```php
